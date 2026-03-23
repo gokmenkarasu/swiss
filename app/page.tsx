@@ -81,14 +81,15 @@ function ScoreArc({ score, color }: { score: number; color: string }) {
 
 type TrendMap = Record<string, { trendPct: number; sparkline: number[] }>;
 
-function TrendBadge({ trendPct, loading }: { trendPct: number | null; loading: boolean }) {
-  if (loading) return <span className="text-zinc-500 text-xs animate-pulse">trend yükleniyor…</span>;
-  if (trendPct === null) return null;
-  const up = trendPct >= 0;
+function TrendBadge({ trendPct, fallback, loading }: { trendPct: number | null; fallback: number; loading: boolean }) {
+  if (loading) return <span className="text-zinc-500 text-xs animate-pulse">·</span>;
+  const pct = trendPct ?? fallback;
+  const up = pct >= 0;
+  const isLive = trendPct !== null;
   return (
     <span className={`font-medium ${up ? "text-green-400" : "text-red-400"}`}>
-      {up ? "↑" : "↓"} %{Math.abs(trendPct)} trend
-      <span className="ml-1 text-zinc-500 font-normal">(Google)</span>
+      {up ? "↑" : "↓"} %{Math.abs(pct)} trend
+      {isLive && <span className="ml-1 text-zinc-500 font-normal text-[10px]">canlı</span>}
     </span>
   );
 }
@@ -115,7 +116,7 @@ function GapCard({ gap, trends, trendsLoading }: { gap: GapOpportunity; trends: 
           <p className="font-semibold text-white/90 text-sm mb-1">"{gap.keyword}"</p>
           <div className="flex items-center gap-3 text-xs text-zinc-400 mb-3 flex-wrap">
             <span>{gap.searchVolume.toLocaleString()} arama/hafta</span>
-            <TrendBadge trendPct={trendPct} loading={trendsLoading} />
+            <TrendBadge trendPct={trendPct} fallback={gap.volumeTrend} loading={trendsLoading} />
             <span>Rakip kapsam: %{gap.competitorCoverage}</span>
           </div>
           <p className="text-xs text-zinc-300 leading-relaxed mb-4">{gap.insight}</p>

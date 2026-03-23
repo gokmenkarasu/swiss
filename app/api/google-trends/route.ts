@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
-export const revalidate = 21600; // 6-hour cache
+export const revalidate = 86400; // 24-hour cache (premium credits are limited)
 
 const SCRAPER_KEY = process.env.SCRAPER_API_KEY;
 
 function scraperFetch(url: string) {
-  const proxied = `https://api.scraperapi.com/?api_key=${SCRAPER_KEY}&url=${encodeURIComponent(url)}`;
+  const proxied = `https://api.scraperapi.com/?api_key=${SCRAPER_KEY}&premium=true&url=${encodeURIComponent(url)}`;
   return fetch(proxied, { headers: { Accept: "text/plain" } });
 }
 
