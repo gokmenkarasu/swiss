@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   initContentStatsTable,
+  initPostsTable,
   upsertContentStat,
+  upsertPost,
   getLatestContentStats,
+  getPostStats,
+  getLatestFetchDate,
 } from "@/lib/db";
 
 const APIFY_TOKEN = process.env.APIFY_API_TOKEN;
@@ -33,6 +37,12 @@ interface ApifyPost {
   viewCount?: number;
   playCount?: number;
 
+  // ID / timestamp
+  id?: string;
+  shortCode?: string;
+  timestamp?: string;      // ISO string
+  takenAtTimestamp?: number; // unix seconds
+
   // Debug: capture raw for logging
   [key: string]: unknown;
 }
@@ -61,6 +71,16 @@ function resolveViews(p: ApifyPost): number {
   return Number(p.videoViewCount ?? p.videoPlayCount ?? p.viewCount ?? p.playCount ?? 0);
 }
 
+function resolvePostId(p: ApifyPost): string {
+  return String(p.id ?? p.shortCode ?? Math.random().toString(36).slice(2));
+}
+
+function resolvePostedAt(p: ApifyPost): string | null {
+  if (p.timestamp) return p.timestamp;
+  if (p.takenAtTimestamp) return new Date(Number(p.takenAtTimestamp) * 1000).toISOString();
+  return null;
+}
+
 async function scrapeUserPosts(username: string): Promise<ApifyPost[]> {
   const runRes = await fetch(
     `https://api.apify.com/v2/acts/${POST_ACTOR}/runs?token=${APIFY_TOKEN}`,
@@ -70,7 +90,7 @@ async function scrapeUserPosts(username: string): Promise<ApifyPost[]> {
       body: JSON.stringify({
         directUrls: [`https://www.instagram.com/${username}/`],
         resultsType: "posts",
-        resultsLimit: 30,
+        resultsLimit: 100,
       }),
     }
   );
@@ -109,6 +129,8 @@ async function scrapeUserPosts(username: string): Promise<ApifyPost[]> {
       likesCount: items[0].likesCount,
       commentsCount: items[0].commentsCount,
       videoViewCount: items[0].videoViewCount,
+      timestamp: items[0].timestamp,
+      takenAtTimestamp: items[0].takenAtTimestamp,
     });
   }
 
@@ -140,23 +162,42 @@ function calcStats(posts: ApifyPost[], followers: number) {
   return { photos, videos, carousels, avgLikes, avgComments, avgViews, engagementRate };
 }
 
-// GET — returns latest content stats from DB
-export async function GET() {
+// GET — returns post stats from DB, filtered by ?days= (default 30)
+export async function GET(req: NextRequest) {
   try {
-    await initContentStatsTable();
+    await Promise.all([initContentStatsTable(), initPostsTable()]);
+
+    const url = new URL(req.url);
+    const days = parseInt(url.searchParams.get("days") ?? "30", 10);
+
+    // Try post-based stats first (richer, date-filtered)
+    const postStats = await getPostStats(days);
+
+    if (postStats.length > 0) {
+      // Add last_fetch per username
+      const withFetch = await Promise.all(
+        postStats.map(async (s) => ({
+          ...s,
+          last_fetch: await getLatestFetchDate(s.username),
+        }))
+      );
+      return NextResponse.json({ stats: withFetch, source: "posts", days });
+    }
+
+    // Fallback: aggregate content stats (no date filter)
     const stats = await getLatestContentStats();
-    return NextResponse.json({ stats });
+    return NextResponse.json({ stats, source: "content_stats", days });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }
 
 // POST — two modes:
-//   { mode: "apify", username, followers }  → scrape via Apify
-//   { mode: "manual", username, ...fields } → manual upsert
+//   { mode: "apify", username, followers }  → scrape via Apify, store individual posts
+//   { mode: "manual", username, ...fields } → manual upsert to content_stats only
 export async function POST(req: NextRequest) {
   try {
-    await initContentStatsTable();
+    await Promise.all([initContentStatsTable(), initPostsTable()]);
     const body = await req.json();
 
     if (body.mode === "manual") {
@@ -190,6 +231,23 @@ export async function POST(req: NextRequest) {
     if (!username) return NextResponse.json({ error: "username required" }, { status: 400 });
 
     const posts = await scrapeUserPosts(username);
+
+    // Store each post individually
+    for (const p of posts) {
+      const postId = resolvePostId(p);
+      const postedAt = resolvePostedAt(p);
+      await upsertPost({
+        username,
+        post_id:        postId,
+        post_type:      resolveType(p),
+        likes_count:    resolveLikes(p),
+        comments_count: resolveComments(p),
+        views_count:    resolveViews(p),
+        posted_at:      postedAt ?? new Date().toISOString(),
+      });
+    }
+
+    // Also upsert aggregate snapshot (for fallback / content_stats table)
     const { photos, videos, carousels, avgLikes, avgComments, avgViews, engagementRate } =
       calcStats(posts, followers);
 

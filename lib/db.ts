@@ -72,6 +72,101 @@ export async function getLatestSnapshots(): Promise<Snapshot[]> {
   return rows as Snapshot[];
 }
 
+// ─── INDIVIDUAL POSTS ────────────────────────────────────────────────────────
+
+export async function initPostsTable() {
+  await sql`
+    CREATE TABLE IF NOT EXISTS instagram_posts (
+      id            SERIAL PRIMARY KEY,
+      username      VARCHAR(100) NOT NULL,
+      post_id       VARCHAR(200) NOT NULL,
+      post_type     VARCHAR(20),
+      likes_count   INTEGER DEFAULT 0,
+      comments_count INTEGER DEFAULT 0,
+      views_count   INTEGER DEFAULT 0,
+      posted_at     TIMESTAMPTZ,
+      fetched_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (username, post_id)
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_posts_username_date
+    ON instagram_posts (username, posted_at DESC)
+  `;
+}
+
+export interface Post {
+  username: string;
+  post_id: string;
+  post_type: string;
+  likes_count: number;
+  comments_count: number;
+  views_count: number;
+  posted_at: string;
+}
+
+export async function upsertPost(post: Omit<Post, never>) {
+  await sql`
+    INSERT INTO instagram_posts
+      (username, post_id, post_type, likes_count, comments_count, views_count, posted_at)
+    VALUES
+      (${post.username}, ${post.post_id}, ${post.post_type},
+       ${post.likes_count}, ${post.comments_count}, ${post.views_count},
+       ${post.posted_at})
+    ON CONFLICT (username, post_id)
+    DO UPDATE SET
+      post_type      = EXCLUDED.post_type,
+      likes_count    = EXCLUDED.likes_count,
+      comments_count = EXCLUDED.comments_count,
+      views_count    = EXCLUDED.views_count,
+      posted_at      = EXCLUDED.posted_at,
+      fetched_at     = NOW()
+  `;
+}
+
+export interface PostStats {
+  username: string;
+  total_posts: number;
+  photo_count: number;
+  video_count: number;
+  carousel_count: number;
+  avg_likes: number;
+  avg_comments: number;
+  avg_views: number;
+  engagement_rate: number;
+  latest_post_at: string | null;
+  oldest_post_at: string | null;
+}
+
+export async function getPostStats(days: number): Promise<PostStats[]> {
+  const rows = await sql`
+    SELECT
+      username,
+      COUNT(*)::int                                            AS total_posts,
+      COUNT(*) FILTER (WHERE post_type = 'Image')::int        AS photo_count,
+      COUNT(*) FILTER (WHERE post_type = 'Video')::int        AS video_count,
+      COUNT(*) FILTER (WHERE post_type = 'Sidecar')::int      AS carousel_count,
+      ROUND(AVG(likes_count), 2)                              AS avg_likes,
+      ROUND(AVG(comments_count), 2)                           AS avg_comments,
+      ROUND(AVG(CASE WHEN views_count > 0 THEN views_count END), 2) AS avg_views,
+      MAX(posted_at)::text                                    AS latest_post_at,
+      MIN(posted_at)::text                                    AS oldest_post_at
+    FROM instagram_posts
+    WHERE posted_at >= NOW() - (${days}::int * INTERVAL '1 day')
+    GROUP BY username
+  `;
+  return rows as PostStats[];
+}
+
+export async function getLatestFetchDate(username: string): Promise<string | null> {
+  const rows = await sql`
+    SELECT MAX(fetched_at)::text AS last_fetch
+    FROM instagram_posts
+    WHERE username = ${username}
+  `;
+  return rows[0]?.last_fetch ?? null;
+}
+
 // ─── CONTENT STATS ───────────────────────────────────────────────────────────
 
 export async function initContentStatsTable() {

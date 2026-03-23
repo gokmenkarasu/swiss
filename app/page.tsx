@@ -32,7 +32,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: string |
 import { gaps, competitors, venueScores, demandSignals } from "@/lib/data";
 import type { GapOpportunity } from "@/lib/data";
 import type { InstagramProfile } from "@/app/api/instagram-analysis/route";
-import type { Snapshot, ContentStat } from "@/lib/db";
+import type { Snapshot, ContentStat, PostStats } from "@/lib/db";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
@@ -509,32 +509,40 @@ function shortLabel(handle: string) {
 
 // ─── ENGAGEMENT INTELLIGENCE TAB ─────────────────────────────────────────────
 
+const DAY_OPTIONS = [
+  { value: 7,  label: "7 gün" },
+  { value: 30, label: "30 gün" },
+  { value: 90, label: "90 gün" },
+];
+
+type EngStat = (ContentStat | PostStats) & { last_fetch?: string | null };
+
 function ContentIntelligenceTab() {
-  const [stats, setStats] = useState<ContentStat[]>([]);
+  const [days, setDays]             = useState(30);
+  const [stats, setStats]           = useState<EngStat[]>([]);
   const [latestSnaps, setLatestSnaps] = useState<Snapshot[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading]       = useState(false);
   const [fetchingHandle, setFetchingHandle] = useState<string | null>(null);
   const [showManual, setShowManual] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg]               = useState<string | null>(null);
+  const [loadError, setLoadError]   = useState<string | null>(null);
 
   // Manual form state
-  const [mHandle, setMHandle] = useState(competitors[0]?.instagramHandle ?? "");
-  const [mPosts, setMPosts]     = useState("");
-  const [mPhotos, setMPhotos]   = useState("");
-  const [mVideos, setMVideos]   = useState("");
-  const [mCarousel, setMCarousel] = useState("");
-  const [mLikes, setMLikes]     = useState("");
-  const [mComments, setMComments] = useState("");
-  const [mViews, setMViews]     = useState("");
+  const [mHandle, setMHandle]       = useState(competitors[0]?.instagramHandle ?? "");
+  const [mPosts, setMPosts]         = useState("");
+  const [mPhotos, setMPhotos]       = useState("");
+  const [mVideos, setMVideos]       = useState("");
+  const [mCarousel, setMCarousel]   = useState("");
+  const [mLikes, setMLikes]         = useState("");
+  const [mComments, setMComments]   = useState("");
+  const [mViews, setMViews]         = useState("");
 
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
+  const load = useCallback(async (d: number) => {
     setLoading(true);
     setLoadError(null);
     try {
       const [contentRes, snapRes] = await Promise.all([
-        fetch("/api/instagram-content"),
+        fetch(`/api/instagram-content?days=${d}`),
         fetch("/api/instagram-history?days=1"),
       ]);
       const contentData = await contentRes.json().catch(() => ({}));
@@ -548,12 +556,12 @@ function ContentIntelligenceTab() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(days); }, [load, days]);
 
   const fetchOne = async (username: string) => {
     const snap = latestSnaps.find((s) => s.username === username);
     setFetchingHandle(username);
-    setMsg(`⏳ ${username} için Apify çalışıyor, 2-3 dakika sürebilir...`);
+    setMsg(`⏳ ${username} için Apify çalışıyor (100 post), 2-3 dakika sürebilir...`);
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 min
@@ -566,8 +574,8 @@ function ContentIntelligenceTab() {
       clearTimeout(timeoutId);
       const d = await res.json().catch(() => ({ error: "Geçersiz yanıt" }));
       if (d.error) throw new Error(d.error);
-      setMsg(`✓ ${username} — ${d.posts_scraped} post çekildi`);
-      load();
+      setMsg(`✓ ${username} — ${d.posts_scraped} post kaydedildi`);
+      load(days);
     } catch (e) {
       if (String(e).includes("aborted") || String(e).includes("abort")) {
         setMsg("⏱ Zaman aşımı — Apify çok uzun sürdü. Manuel giriş kullanın.");
@@ -602,7 +610,7 @@ function ContentIntelligenceTab() {
       const d = await res.json();
       if (d.error) throw new Error(d.error);
       setMsg("✓ Kaydedildi");
-      load();
+      load(days);
     } catch (e) {
       setMsg(`Hata: ${e}`);
     }
@@ -611,17 +619,26 @@ function ContentIntelligenceTab() {
   const statMap = new Map(stats.map((s) => [s.username, s]));
   const snapMap = new Map(latestSnaps.map((s) => [s.username, s]));
 
-  // Sort competitors by engagement_rate desc (DB returns NUMERIC as string → Number())
+  // Sort competitors by engagement_rate desc
   const sorted = [...competitors].sort((a, b) => {
     const ra = Number(statMap.get(a.instagramHandle)?.engagement_rate ?? 0);
     const rb = Number(statMap.get(b.instagramHandle)?.engagement_rate ?? 0);
     return rb - ra;
   });
 
-  const maxEng = Math.max(...sorted.map((c) => Number(statMap.get(c.instagramHandle)?.engagement_rate ?? 0)), 0.01);
+  const maxEng = Math.max(
+    ...sorted.map((c) => Number(statMap.get(c.instagramHandle)?.engagement_rate ?? 0)),
+    0.01
+  );
 
   const medalColor = (i: number) =>
     i === 0 ? "#FFD700" : i === 1 ? "#C0C0C0" : i === 2 ? "#CD7F32" : "#3f3f46";
+
+  const formatDate = (iso: string | null | undefined) => {
+    if (!iso) return null;
+    const d = new Date(iso);
+    return d.toLocaleDateString("tr-TR", { day: "numeric", month: "short", year: "numeric" });
+  };
 
   return (
     <div className="space-y-5">
@@ -629,12 +646,32 @@ function ContentIntelligenceTab() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h3 className="font-semibold text-white/90">Engagement Intelligence</h3>
-          <p className="text-xs text-zinc-500 mt-0.5">Son 30 post · fotoğraf / reel / carousel dağılımı</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Day filter */}
+          <div className="flex rounded-xl overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
+            {DAY_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setDays(opt.value)}
+                className={`text-xs px-3 py-1.5 transition-all ${
+                  days === opt.value
+                    ? "text-amber-300 font-semibold"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+                style={days === opt.value ? { background: "rgba(201,168,76,0.18)" } : {}}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
           <button
             onClick={() => setShowManual(!showManual)}
-            className={`text-xs px-3 py-1.5 rounded-lg transition-all ${showManual ? "text-amber-300 bg-amber-500/20 border border-amber-500/40" : "glass glass-hover text-zinc-400"}`}
+            className={`text-xs px-3 py-1.5 rounded-lg transition-all ${
+              showManual
+                ? "text-amber-300 bg-amber-500/20 border border-amber-500/40"
+                : "glass glass-hover text-zinc-400"
+            }`}
           >
             Manuel Giriş
           </button>
@@ -646,8 +683,11 @@ function ContentIntelligenceTab() {
         <div className="glass rounded-2xl p-4 space-y-3" style={{ border: "1px solid rgba(201,168,76,0.25)" }}>
           <p className="text-xs text-zinc-400 font-medium">Manuel veri girişi</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <select value={mHandle} onChange={(e) => setMHandle(e.target.value)}
-              className="col-span-2 sm:col-span-4 bg-transparent border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-amber-500/50">
+            <select
+              value={mHandle}
+              onChange={(e) => setMHandle(e.target.value)}
+              className="col-span-2 sm:col-span-4 bg-transparent border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-amber-500/50"
+            >
               {competitors.map((c) => (
                 <option key={c.instagramHandle} value={c.instagramHandle} className="bg-zinc-900">
                   {c.shortName} (@{c.instagramHandle})
@@ -655,23 +695,30 @@ function ContentIntelligenceTab() {
               ))}
             </select>
             {[
-              { label: "Toplam post", val: mPosts, set: setMPosts },
-              { label: "📷 Fotoğraf", val: mPhotos, set: setMPhotos },
-              { label: "🎬 Reel/Video", val: mVideos, set: setMVideos },
-              { label: "📑 Carousel", val: mCarousel, set: setMCarousel },
-              { label: "Ort. Like", val: mLikes, set: setMLikes },
-              { label: "Ort. Yorum", val: mComments, set: setMComments },
+              { label: "Toplam post", val: mPosts,    set: setMPosts },
+              { label: "📷 Fotoğraf",  val: mPhotos,   set: setMPhotos },
+              { label: "🎬 Reel/Video",val: mVideos,   set: setMVideos },
+              { label: "📑 Carousel",  val: mCarousel, set: setMCarousel },
+              { label: "Ort. Like",    val: mLikes,    set: setMLikes },
+              { label: "Ort. Yorum",   val: mComments, set: setMComments },
               { label: "Ort. Görüntülenme", val: mViews, set: setMViews },
             ].map(({ label, val, set }) => (
-              <input key={label} type="number" placeholder={label} value={val}
+              <input
+                key={label}
+                type="number"
+                placeholder={label}
+                value={val}
                 onChange={(e) => set(e.target.value)}
-                className="bg-transparent border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-amber-500/50 placeholder:text-zinc-600" />
+                className="bg-transparent border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-amber-500/50 placeholder:text-zinc-600"
+              />
             ))}
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={saveManual}
+            <button
+              onClick={saveManual}
               className="text-xs px-4 py-2 rounded-lg font-semibold text-black"
-              style={{ background: "linear-gradient(135deg,#c9a84c,#e8c660)" }}>
+              style={{ background: "linear-gradient(135deg,#c9a84c,#e8c660)" }}
+            >
               Kaydet
             </button>
             {msg && <span className="text-xs text-zinc-400">{msg}</span>}
@@ -690,7 +737,7 @@ function ContentIntelligenceTab() {
         <p className="text-xs text-red-400 text-center py-4">{loadError}</p>
       )}
 
-      {msg && (
+      {msg && !showManual && (
         <div className="glass rounded-xl px-4 py-3 text-xs text-zinc-300" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
           {msg}
         </div>
@@ -700,24 +747,34 @@ function ContentIntelligenceTab() {
       {!loading && (
         <div className="space-y-2">
           {sorted.map((c, i) => {
-            const stat = statMap.get(c.instagramHandle);
-            const snap = snapMap.get(c.instagramHandle);
-            const color = HANDLE_COLOR[c.instagramHandle] ?? "#6b7280";
+            const stat    = statMap.get(c.instagramHandle);
+            const snap    = snapMap.get(c.instagramHandle);
+            const color   = HANDLE_COLOR[c.instagramHandle] ?? "#6b7280";
             const engRate = Number(stat?.engagement_rate ?? 0);
             const engPct  = maxEng > 0 ? (engRate / maxEng) * 100 : 0;
-            const total   = stat ? Number(stat.photo_count) + Number(stat.video_count) + Number(stat.carousel_count) : 0;
+            const photo   = stat ? Number((stat as PostStats).photo_count ?? (stat as ContentStat).photo_count ?? 0) : 0;
+            const video   = stat ? Number((stat as PostStats).video_count ?? (stat as ContentStat).video_count ?? 0) : 0;
+            const carousel = stat ? Number((stat as PostStats).carousel_count ?? (stat as ContentStat).carousel_count ?? 0) : 0;
+            const total   = photo + video + carousel;
+            const totalPosts = stat ? Number((stat as PostStats).total_posts ?? (stat as ContentStat).posts_scraped ?? 0) : 0;
             const isSelf  = c.isSelf;
+            const lastFetch = (stat as EngStat)?.last_fetch ?? null;
 
             return (
-              <div key={c.instagramHandle} className="glass rounded-2xl p-4 transition-all"
+              <div
+                key={c.instagramHandle}
+                className="glass rounded-2xl p-4 transition-all"
                 style={{
                   border: `1px solid ${isSelf ? "rgba(201,168,76,0.22)" : "rgba(255,255,255,0.06)"}`,
                   background: isSelf ? "rgba(201,168,76,0.05)" : undefined,
-                }}>
+                }}
+              >
                 <div className="flex items-start gap-3">
-                  {/* Rank */}
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-sm font-bold mt-0.5"
-                    style={{ background: `${medalColor(i)}20`, color: medalColor(i) }}>
+                  {/* Rank badge */}
+                  <div
+                    className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-sm font-bold mt-0.5"
+                    style={{ background: `${medalColor(i)}20`, color: medalColor(i) }}
+                  >
                     {i + 1}
                   </div>
 
@@ -726,12 +783,21 @@ function ContentIntelligenceTab() {
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <span className="text-sm font-semibold text-white/90">{c.shortName}</span>
                       {isSelf && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold"
-                          style={{ background: "rgba(201,168,76,0.25)", color: "#c9a84c" }}>BİZ</span>
+                        <span
+                          className="text-[9px] px-1.5 py-0.5 rounded-full font-bold"
+                          style={{ background: "rgba(201,168,76,0.25)", color: "#c9a84c" }}
+                        >
+                          BİZ
+                        </span>
                       )}
                       {snap && (
                         <span className="text-xs text-zinc-600">
                           {(snap.followers / 1000).toFixed(1)}K takipçi
+                        </span>
+                      )}
+                      {lastFetch && (
+                        <span className="text-[10px] text-zinc-700 ml-auto">
+                          son çekim: {formatDate(lastFetch)}
                         </span>
                       )}
                     </div>
@@ -740,19 +806,25 @@ function ContentIntelligenceTab() {
                       <>
                         {/* Content type pills */}
                         <div className="flex items-center gap-2 mb-3 flex-wrap">
-                          <span className="text-xs px-2 py-0.5 rounded-md font-medium"
-                            style={{ background: "rgba(255,255,255,0.07)", color: "#a1a1aa" }}>
-                            📷 {stat.photo_count} fotoğraf
+                          <span
+                            className="text-xs px-2 py-0.5 rounded-md font-medium"
+                            style={{ background: "rgba(255,255,255,0.07)", color: "#a1a1aa" }}
+                          >
+                            📷 {photo} fotoğraf
                           </span>
-                          <span className="text-xs px-2 py-0.5 rounded-md font-medium"
-                            style={{ background: "rgba(255,255,255,0.07)", color: "#a1a1aa" }}>
-                            🎬 {stat.video_count} reel
+                          <span
+                            className="text-xs px-2 py-0.5 rounded-md font-medium"
+                            style={{ background: "rgba(255,255,255,0.07)", color: "#a1a1aa" }}
+                          >
+                            🎬 {video} reel
                           </span>
-                          <span className="text-xs px-2 py-0.5 rounded-md font-medium"
-                            style={{ background: "rgba(255,255,255,0.07)", color: "#a1a1aa" }}>
-                            📑 {stat.carousel_count} carousel
+                          <span
+                            className="text-xs px-2 py-0.5 rounded-md font-medium"
+                            style={{ background: "rgba(255,255,255,0.07)", color: "#a1a1aa" }}
+                          >
+                            📑 {carousel} carousel
                           </span>
-                          <span className="text-xs text-zinc-600">· {stat.posts_scraped} post analiz edildi</span>
+                          <span className="text-xs text-zinc-600">· son {days} günde {totalPosts} post</span>
                         </div>
 
                         {/* Avg metrics */}
@@ -779,13 +851,13 @@ function ContentIntelligenceTab() {
                               <p className="text-[10px] text-zinc-600">ort. görüntülenme</p>
                             </div>
                           )}
-                          {/* content type bar */}
+                          {/* Content type bar */}
                           {total > 0 && (
                             <div className="flex-1 min-w-[80px]">
                               <div className="flex rounded-full overflow-hidden h-1.5">
-                                <div style={{ width: `${(Number(stat.photo_count) / total) * 100}%`, background: "#f59e0b" }} />
-                                <div style={{ width: `${(Number(stat.video_count) / total) * 100}%`, background: "#8b5cf6" }} />
-                                <div style={{ width: `${(Number(stat.carousel_count) / total) * 100}%`, background: "#06b6d4" }} />
+                                <div style={{ width: `${(photo / total) * 100}%`, background: "#f59e0b" }} />
+                                <div style={{ width: `${(video / total) * 100}%`, background: "#8b5cf6" }} />
+                                <div style={{ width: `${(carousel / total) * 100}%`, background: "#06b6d4" }} />
                               </div>
                               <p className="text-[9px] text-zinc-700 mt-0.5">
                                 <span style={{ color: "#f59e0b" }}>■</span> foto
@@ -797,7 +869,9 @@ function ContentIntelligenceTab() {
                         </div>
                       </>
                     ) : (
-                      <p className="text-xs text-zinc-600 mb-3">Henüz veri yok — Apify ile çek veya manuel gir</p>
+                      <p className="text-xs text-zinc-600 mb-3">
+                        Henüz veri yok — Apify ile çek veya manuel gir
+                      </p>
                     )}
                   </div>
 
@@ -809,10 +883,11 @@ function ContentIntelligenceTab() {
                       </p>
                       <p className="text-[10px] text-zinc-600 mt-0.5">eng. rate</p>
                     </div>
-                    {/* Eng rate bar */}
                     <div className="w-16 rounded-full h-1" style={{ background: "rgba(255,255,255,0.07)" }}>
-                      <div className="h-1 rounded-full transition-all duration-700"
-                        style={{ width: `${engPct}%`, background: color }} />
+                      <div
+                        className="h-1 rounded-full transition-all duration-700"
+                        style={{ width: `${engPct}%`, background: color }}
+                      />
                     </div>
                     <button
                       onClick={() => fetchOne(c.instagramHandle)}
@@ -827,10 +902,6 @@ function ContentIntelligenceTab() {
             );
           })}
         </div>
-      )}
-
-      {!showManual && msg && (
-        <p className="text-xs text-zinc-400 text-center">{msg}</p>
       )}
     </div>
   );
