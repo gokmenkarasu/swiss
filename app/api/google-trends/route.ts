@@ -10,8 +10,8 @@ function scraperFetch(url: string) {
 }
 
 function stripPrefix(text: string) {
-  // Google Trends responses start with ")]}',\n"
-  return text.replace(/^\)\]\}',\n/, "");
+  // Google Trends responses start with ")]}'  \n"
+  return text.replace(/^\)\]\}'\n/, "");
 }
 
 function avg(arr: number[]) {
