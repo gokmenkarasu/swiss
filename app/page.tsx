@@ -537,6 +537,7 @@ function InstagramHistoryTab() {
 
   // Ranked latest
   const ranked = [...latest].sort((a, b) => b.followers - a.followers);
+  const maxFollowers = Math.max(...ranked.map((s) => s.followers), 1);
 
   const saveBackfill = async () => {
     if (!bfHandle || !bfFollowers || !bfDate) return;
@@ -740,25 +741,34 @@ function InstagramHistoryTab() {
                 const diff = prevFollowers !== null ? s.followers - prevFollowers : null;
                 const color = HANDLE_COLOR[s.username] ?? "#6b7280";
                 const isSelf = competitors.find((c) => c.instagramHandle === s.username)?.isSelf;
+                const pct = Math.round((s.followers / maxFollowers) * 100);
                 return (
-                  <div key={s.username} className="flex items-center gap-4 px-4 py-3"
+                  <div key={s.username} className="px-4 py-3"
                     style={isSelf ? { background: "rgba(201,168,76,0.06)" } : {}}>
-                    <span className="text-xs font-bold w-5 text-zinc-600">#{i + 1}</span>
-                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: color }} />
-                    <div className="flex-1 min-w-0">
-                      <span className="text-sm font-medium text-white/80">{shortLabel(s.username)}</span>
-                      {isSelf && <span className="text-[10px] ml-1.5 px-1.5 py-0.5 rounded-full font-semibold" style={{ background: "rgba(201,168,76,0.2)", color: "#c9a84c" }}>biz</span>}
-                      <span className="text-xs text-zinc-600 ml-2">@{s.username}</span>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold tabular-nums" style={{ color }}>
-                        {s.followers.toLocaleString("tr-TR")}
-                      </p>
-                      {diff !== null && (
-                        <p className={`text-xs tabular-nums ${diff >= 0 ? "text-green-400" : "text-red-400"}`}>
-                          {diff >= 0 ? "+" : ""}{diff.toLocaleString("tr-TR")}
+                    <div className="flex items-center gap-4 mb-2">
+                      <span className="text-xs font-bold w-5 text-zinc-600 flex-shrink-0">#{i + 1}</span>
+                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: color }} />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-medium text-white/80">{shortLabel(s.username)}</span>
+                        {isSelf && <span className="text-[10px] ml-1.5 px-1.5 py-0.5 rounded-full font-semibold" style={{ background: "rgba(201,168,76,0.2)", color: "#c9a84c" }}>biz</span>}
+                        <span className="text-xs text-zinc-600 ml-2">@{s.username}</span>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-sm font-bold tabular-nums" style={{ color }}>
+                          {s.followers.toLocaleString("tr-TR")}
                         </p>
-                      )}
+                        {diff !== null && (
+                          <p className={`text-xs tabular-nums ${diff >= 0 ? "text-green-400" : "text-red-400"}`}>
+                            {diff >= 0 ? "+" : ""}{diff.toLocaleString("tr-TR")}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="ml-9 w-full rounded-full h-1" style={{ background: "rgba(255,255,255,0.05)" }}>
+                      <div
+                        className="h-1 rounded-full transition-all duration-500"
+                        style={{ width: `${pct}%`, background: color, opacity: 0.7 }}
+                      />
                     </div>
                   </div>
                 );
