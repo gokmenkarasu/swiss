@@ -79,8 +79,24 @@ function ScoreArc({ score, color }: { score: number; color: string }) {
   );
 }
 
-function GapCard({ gap }: { gap: GapOpportunity }) {
+type TrendMap = Record<string, { trendPct: number; sparkline: number[] }>;
+
+function TrendBadge({ trendPct, loading }: { trendPct: number | null; loading: boolean }) {
+  if (loading) return <span className="text-zinc-500 text-xs animate-pulse">trend yükleniyor…</span>;
+  if (trendPct === null) return null;
+  const up = trendPct >= 0;
+  return (
+    <span className={`font-medium ${up ? "text-green-400" : "text-red-400"}`}>
+      {up ? "↑" : "↓"} %{Math.abs(trendPct)} trend
+      <span className="ml-1 text-zinc-500 font-normal">(Google)</span>
+    </span>
+  );
+}
+
+function GapCard({ gap, trends, trendsLoading }: { gap: GapOpportunity; trends: TrendMap; trendsLoading: boolean }) {
   const urg = urgencyConfig[gap.urgency];
+  const trendData = trends[gap.keyword] ?? null;
+  const trendPct = trendData ? trendData.trendPct : null;
   return (
     <div className={`glass glass-hover rounded-2xl p-5 border ${urg.border} transition-all duration-200`}>
       <div className="flex items-start gap-4">
@@ -97,9 +113,9 @@ function GapCard({ gap }: { gap: GapOpportunity }) {
             </span>
           </div>
           <p className="font-semibold text-white/90 text-sm mb-1">"{gap.keyword}"</p>
-          <div className="flex items-center gap-3 text-xs text-zinc-400 mb-3">
+          <div className="flex items-center gap-3 text-xs text-zinc-400 mb-3 flex-wrap">
             <span>{gap.searchVolume.toLocaleString()} arama/hafta</span>
-            <span className="text-green-400 font-medium">↑ %{gap.volumeTrend} trend</span>
+            <TrendBadge trendPct={trendPct} loading={trendsLoading} />
             <span>Rakip kapsam: %{gap.competitorCoverage}</span>
           </div>
           <p className="text-xs text-zinc-300 leading-relaxed mb-4">{gap.insight}</p>
@@ -127,6 +143,18 @@ function GapCard({ gap }: { gap: GapOpportunity }) {
 function GapsTab() {
   const criticalCount = gaps.filter((g) => g.urgency === "critical").length;
   const avgCoverage = Math.round(gaps.filter((g) => g.urgency === "critical").reduce((a, g) => a + g.competitorCoverage, 0) / criticalCount);
+  const [trends, setTrends] = useState<TrendMap>({});
+  const [trendsLoading, setTrendsLoading] = useState(true);
+
+  useEffect(() => {
+    const keywords = gaps.map((g) => g.keyword).join(",");
+    fetch(`/api/google-trends?keywords=${encodeURIComponent(keywords)}`)
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((data: TrendMap) => setTrends(data))
+      .catch(() => {/* silent fallback — cards still show */})
+      .finally(() => setTrendsLoading(false));
+  }, []);
+
   return (
     <div className="space-y-4">
       <div className="glass rounded-2xl p-4 flex items-center gap-3 border border-amber-500/20">
@@ -137,7 +165,7 @@ function GapsTab() {
         </p>
       </div>
       <div className="grid gap-4">
-        {gaps.map((g) => <GapCard key={g.id} gap={g} />)}
+        {gaps.map((g) => <GapCard key={g.id} gap={g} trends={trends} trendsLoading={trendsLoading} />)}
       </div>
     </div>
   );
