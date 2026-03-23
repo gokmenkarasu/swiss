@@ -10,11 +10,55 @@ const POST_ACTOR = "apify~instagram-scraper";
 const POLL_INTERVAL_MS = 4000;
 const MAX_WAIT_MS = 120000;
 
+// Apify instagram-scraper returns varied field names — handle all variants
 interface ApifyPost {
-  type?: string;
+  // Type fields
+  type?: string;           // "Image" | "Video" | "Sidecar"
+  mediaType?: string;      // alternate name
+  productType?: string;    // "feed" | "clips" | "carousel_container"
+  isVideo?: boolean;       // fallback
+
+  // Engagement fields
   likesCount?: number;
+  diggCount?: number;      // alternate name (TikTok-style)
+  likes?: number;
+  likeCount?: number;
+
   commentsCount?: number;
+  comments?: number;
+  commentCount?: number;
+
   videoViewCount?: number;
+  videoPlayCount?: number;
+  viewCount?: number;
+  playCount?: number;
+
+  // Debug: capture raw for logging
+  [key: string]: unknown;
+}
+
+function resolveType(p: ApifyPost): "Image" | "Video" | "Sidecar" | "Unknown" {
+  const t = (p.type ?? p.mediaType ?? "").toLowerCase();
+  const pt = (p.productType ?? "").toLowerCase();
+
+  if (t.includes("video") || t.includes("clips") || p.isVideo === true) return "Video";
+  if (pt === "clips") return "Video";
+  if (t.includes("sidecar") || pt === "carousel_container") return "Sidecar";
+  if (t.includes("image") || t.includes("graphimage") || t.includes("photo")) return "Image";
+  if (p.isVideo === false) return "Image";
+  return "Unknown";
+}
+
+function resolveLikes(p: ApifyPost): number {
+  return Number(p.likesCount ?? p.diggCount ?? p.likes ?? p.likeCount ?? 0);
+}
+
+function resolveComments(p: ApifyPost): number {
+  return Number(p.commentsCount ?? p.comments ?? p.commentCount ?? 0);
+}
+
+function resolveViews(p: ApifyPost): number {
+  return Number(p.videoViewCount ?? p.videoPlayCount ?? p.viewCount ?? p.playCount ?? 0);
 }
 
 async function scrapeUserPosts(username: string): Promise<ApifyPost[]> {
@@ -24,7 +68,7 @@ async function scrapeUserPosts(username: string): Promise<ApifyPost[]> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        usernames: [username],
+        directUrls: [`https://www.instagram.com/${username}/`],
         resultsType: "posts",
         resultsLimit: 30,
       }),
@@ -33,7 +77,7 @@ async function scrapeUserPosts(username: string): Promise<ApifyPost[]> {
   const runData = await runRes.json();
   const runId: string = runData.data?.id;
   const datasetId: string = runData.data?.defaultDatasetId;
-  if (!runId) throw new Error(`Failed to start run for ${username}`);
+  if (!runId) throw new Error(`Failed to start Apify run for @${username}: ${JSON.stringify(runData)}`);
 
   const start = Date.now();
   while (Date.now() - start < MAX_WAIT_MS) {
@@ -44,26 +88,49 @@ async function scrapeUserPosts(username: string): Promise<ApifyPost[]> {
     const { data } = await statusRes.json();
     if (data?.status === "SUCCEEDED") break;
     if (data?.status === "FAILED" || data?.status === "ABORTED") {
-      throw new Error(`Apify run ${data.status} for ${username}`);
+      throw new Error(`Apify run ${data.status} for @${username}`);
     }
   }
 
   const itemsRes = await fetch(
     `https://api.apify.com/v2/datasets/${datasetId}/items?token=${APIFY_TOKEN}`
   );
-  return await itemsRes.json();
+  const items: ApifyPost[] = await itemsRes.json();
+
+  // Log first item keys for debugging
+  if (items.length > 0) {
+    const sampleKeys = Object.keys(items[0]).slice(0, 20);
+    console.log(`[instagram-content] @${username} sample keys:`, sampleKeys);
+    console.log(`[instagram-content] @${username} sample[0]:`, {
+      type: items[0].type,
+      mediaType: items[0].mediaType,
+      productType: items[0].productType,
+      isVideo: items[0].isVideo,
+      likesCount: items[0].likesCount,
+      commentsCount: items[0].commentsCount,
+      videoViewCount: items[0].videoViewCount,
+    });
+  }
+
+  return items;
 }
 
 function calcStats(posts: ApifyPost[], followers: number) {
-  const photos    = posts.filter((p) => p.type === "Image").length;
-  const videos    = posts.filter((p) => p.type === "Video").length;
-  const carousels = posts.filter((p) => p.type === "Sidecar").length;
+  const photos    = posts.filter((p) => resolveType(p) === "Image").length;
+  const videos    = posts.filter((p) => resolveType(p) === "Video").length;
+  const carousels = posts.filter((p) => resolveType(p) === "Sidecar").length;
 
-  const avgLikes    = posts.length ? posts.reduce((s, p) => s + (p.likesCount ?? 0), 0) / posts.length : 0;
-  const avgComments = posts.length ? posts.reduce((s, p) => s + (p.commentsCount ?? 0), 0) / posts.length : 0;
-  const avgViews    = posts.filter((p) => p.videoViewCount).length
-    ? posts.filter((p) => p.videoViewCount).reduce((s, p) => s + (p.videoViewCount ?? 0), 0) /
-      posts.filter((p) => p.videoViewCount).length
+  const avgLikes = posts.length
+    ? posts.reduce((s, p) => s + resolveLikes(p), 0) / posts.length
+    : 0;
+
+  const avgComments = posts.length
+    ? posts.reduce((s, p) => s + resolveComments(p), 0) / posts.length
+    : 0;
+
+  const videoPosts = posts.filter((p) => resolveViews(p) > 0);
+  const avgViews = videoPosts.length
+    ? videoPosts.reduce((s, p) => s + resolveViews(p), 0) / videoPosts.length
     : 0;
 
   const engagementRate = followers > 0
@@ -101,14 +168,14 @@ export async function POST(req: NextRequest) {
         : 0;
 
       await upsertContentStat({
-        username:       body.username,
-        posts_scraped:  Number(body.posts_scraped ?? 0),
-        photo_count:    Number(body.photo_count ?? 0),
-        video_count:    Number(body.video_count ?? 0),
-        carousel_count: Number(body.carousel_count ?? 0),
-        avg_likes:      avgLikes,
-        avg_comments:   avgComments,
-        avg_views:      Number(body.avg_views ?? 0),
+        username:        body.username,
+        posts_scraped:   Number(body.posts_scraped ?? 0),
+        photo_count:     Number(body.photo_count ?? 0),
+        video_count:     Number(body.video_count ?? 0),
+        carousel_count:  Number(body.carousel_count ?? 0),
+        avg_likes:       avgLikes,
+        avg_comments:    avgComments,
+        avg_views:       Number(body.avg_views ?? 0),
         engagement_rate: engagementRate,
       });
       return NextResponse.json({ ok: true, source: "manual" });
@@ -128,13 +195,13 @@ export async function POST(req: NextRequest) {
 
     await upsertContentStat({
       username,
-      posts_scraped:  posts.length,
-      photo_count:    photos,
-      video_count:    videos,
-      carousel_count: carousels,
-      avg_likes:      avgLikes,
-      avg_comments:   avgComments,
-      avg_views:      avgViews,
+      posts_scraped:   posts.length,
+      photo_count:     photos,
+      video_count:     videos,
+      carousel_count:  carousels,
+      avg_likes:       avgLikes,
+      avg_comments:    avgComments,
+      avg_views:       avgViews,
       engagement_rate: engagementRate,
     });
 
@@ -142,13 +209,13 @@ export async function POST(req: NextRequest) {
       ok: true,
       source: "apify",
       username,
-      posts_scraped: posts.length,
-      photo_count: photos,
-      video_count: videos,
-      carousel_count: carousels,
-      avg_likes: avgLikes,
-      avg_comments: avgComments,
-      avg_views: avgViews,
+      posts_scraped:   posts.length,
+      photo_count:     photos,
+      video_count:     videos,
+      carousel_count:  carousels,
+      avg_likes:       avgLikes,
+      avg_comments:    avgComments,
+      avg_views:       avgViews,
       engagement_rate: engagementRate,
     });
   } catch (err) {
