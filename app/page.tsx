@@ -910,7 +910,7 @@ function PostingHeatmapSection() {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h4 className="text-sm font-semibold text-white/80">Paylaşım Takvimi</h4>
-          <p className="text-xs text-zinc-500 mt-0.5">Son 90 gün · {totalPosts} post</p>
+          <p className="text-xs text-zinc-500 mt-0.5">Son {spanDays} gün · {totalPosts} post</p>
         </div>
       </div>
 
