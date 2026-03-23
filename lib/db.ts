@@ -310,18 +310,19 @@ export async function upsertContentStat(data: Omit<ContentStat, "snap_date" | "f
   `;
 }
 
-export async function getPostingSchedule(): Promise<{ username: string; date: string; count: number }[]> {
+export async function getPostingSchedule(): Promise<{ username: string; month: string; dow: number; count: number }[]> {
   const rows = await sql`
     SELECT
       username,
-      posted_at::date::text AS date,
-      COUNT(*)::int          AS count
+      TO_CHAR(posted_at, 'YYYY-MM')          AS month,
+      EXTRACT(ISODOW FROM posted_at)::int    AS dow,
+      COUNT(*)::int                          AS count
     FROM instagram_posts
     WHERE posted_at >= NOW() - INTERVAL '180 days'
-    GROUP BY username, posted_at::date
-    ORDER BY username, date
+    GROUP BY username, month, dow
+    ORDER BY username, month, dow
   `;
-  return rows as { username: string; date: string; count: number }[];
+  return rows as { username: string; month: string; dow: number; count: number }[];
 }
 
 export async function getLatestContentStats(): Promise<ContentStat[]> {

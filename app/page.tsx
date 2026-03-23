@@ -831,13 +831,25 @@ function ContentIntelligenceTab() {
 
 // ─── Posting Frequency Heatmap ────────────────────────────────────────────────
 
-type ScheduleRow = { username: string; date: string; count: number };
+type ScheduleRow = { username: string; month: string; dow: number; count: number };
+
+const DOW_LABELS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"]; // dow 1–7
+
+function cellColor(count: number) {
+  if (count === 0)  return "bg-zinc-800";
+  if (count <= 2)   return "bg-green-300";
+  if (count <= 5)   return "bg-green-500";
+  if (count <= 10)  return "bg-green-700";
+  return "bg-green-900";
+}
 
 function PostingHeatmapSection() {
-  const [data, setData]                   = useState<ScheduleRow[]>([]);
-  const [loading, setLoading]             = useState(true);
-  const [selected, setSelected]           = useState<string | null>(null); // null = Tümü
-  const [hovered, setHovered]             = useState<{ date: string; count: number; x: number; y: number } | null>(null);
+  const [data, setData]       = useState<ScheduleRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [hovered, setHovered]   = useState<{
+    label: string; count: number; x: number; y: number;
+  } | null>(null);
 
   useEffect(() => {
     fetch("/api/instagram-posting-schedule")
@@ -846,63 +858,23 @@ function PostingHeatmapSection() {
       .catch(() => setLoading(false));
   }, []);
 
-  // Determine grid range: from oldest post date (or 180d max) to today
-  const today = new Date();
-  const allDates = data.map((r) => r.date).filter(Boolean);
-  const oldestDate = allDates.length
-    ? new Date(allDates.reduce((a, b) => (a < b ? a : b)))
-    : new Date(today.getTime() - 89 * 86400000);
-  const msInDay    = 86400000;
-  const spanDays   = Math.ceil((today.getTime() - oldestDate.getTime()) / msInDay) + 1;
-  const days90: string[] = [];
-  for (let i = spanDays - 1; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    days90.push(d.toISOString().slice(0, 10));
-  }
-
-  // Build count map for selected competitor or all
-  const countMap: Record<string, number> = {};
+  // Aggregate: countMap[month][dow] = total posts
+  const countMap: Record<string, Record<number, number>> = {};
   for (const row of data) {
-    if (selected === null || row.username === selected) {
-      countMap[row.date] = (countMap[row.date] ?? 0) + row.count;
-    }
+    if (selected !== null && row.username !== selected) continue;
+    if (!countMap[row.month]) countMap[row.month] = {};
+    countMap[row.month][row.dow] = (countMap[row.month][row.dow] ?? 0) + row.count;
   }
 
-  // Group into weeks (columns of 7)
-  // Pad so first day falls on correct weekday (Mon=0)
-  const firstDate = new Date(days90[0]);
-  const firstDow  = (firstDate.getDay() + 6) % 7; // Mon=0
-  const padded    = [...Array(firstDow).fill(null), ...days90];
-  const weeks: (string | null)[][] = [];
-  for (let i = 0; i < padded.length; i += 7) {
-    weeks.push(padded.slice(i, i + 7));
-  }
+  // Sorted month list
+  const months = Object.keys(countMap).sort();
 
-  // Month labels: first column always gets a label; subsequent columns get one at each month boundary
-  const monthLabels: (string | null)[] = weeks.map((week, wi) => {
-    const first = week.find((d) => d !== null);
-    if (!first) return null;
-    const d   = new Date(first);
-    const dow = (d.getDay() + 6) % 7;
-    const isMonthBoundary = d.getDate() - dow <= 7;
-    if (wi === 0 || isMonthBoundary) {
-      return d.toLocaleDateString("tr-TR", { month: "short" });
-    }
-    return null;
-  });
+  const totalPosts = Object.values(countMap).flatMap((m) => Object.values(m)).reduce((a, b) => a + b, 0);
 
-  const cellColor = (count: number) => {
-    if (count === 0) return "bg-zinc-800";
-    if (count === 1) return "bg-green-300";
-    if (count === 2) return "bg-green-500";
-    if (count <= 4)  return "bg-green-700";
-    return "bg-green-900";
+  const monthLabel = (ym: string) => {
+    const [y, m] = ym.split("-");
+    return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString("tr-TR", { month: "short", year: "2-digit" });
   };
-
-  const DAY_LABELS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
-
-  const totalPosts = Object.values(countMap).reduce((a, b) => a + b, 0);
 
   return (
     <div className="glass rounded-2xl p-5 space-y-4" style={{ border: "1px solid rgba(255,255,255,0.07)" }}>
@@ -910,7 +882,7 @@ function PostingHeatmapSection() {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h4 className="text-sm font-semibold text-white/80">Paylaşım Takvimi</h4>
-          <p className="text-xs text-zinc-500 mt-0.5">Son {spanDays} gün · {totalPosts} post</p>
+          <p className="text-xs text-zinc-500 mt-0.5">{totalPosts} post · son 6 ay</p>
         </div>
       </div>
 
@@ -943,68 +915,58 @@ function PostingHeatmapSection() {
 
       {loading ? (
         <div className="text-xs text-zinc-600 py-4 text-center">Yükleniyor…</div>
-      ) : data.length === 0 ? (
+      ) : months.length === 0 ? (
         <div className="text-xs text-zinc-600 py-4 text-center">Henüz post verisi yok</div>
       ) : (
-        <div className="relative overflow-x-auto">
-          {/* Grid */}
-          <div className="flex gap-0.5 items-end">
-            {/* Day labels */}
-            <div className="flex flex-col gap-1 mr-2 pb-0">
-              {/* spacer for month label row */}
-              <div className="h-5" />
-              {DAY_LABELS.map((lbl, i) => (
-                <div key={i} className="h-3 w-7 text-[10px] text-zinc-500 flex items-center justify-end pr-1">
-                  {lbl}
-                </div>
-              ))}
-            </div>
-
-            {/* Week columns */}
-            {weeks.map((week, wi) => {
-              const monthLabel = monthLabels[wi];
-              return (
-                <div
-                  key={wi}
-                  className="flex flex-col gap-1"
-                  style={monthLabel ? { borderLeft: "1px solid rgba(255,255,255,0.15)", paddingLeft: "4px", marginLeft: "4px" } : {}}
-                >
-                  {/* Month label — only at boundary */}
-                  <div className="h-5 flex items-end pb-0.5">
-                    {monthLabel && (
-                      <span className="text-[11px] font-semibold text-zinc-300 whitespace-nowrap tracking-wide">
-                        {monthLabel}
-                      </span>
-                    )}
-                  </div>
-                  {/* Cells */}
-                  {week.map((date, di) => {
-                    if (!date) {
-                      return <div key={di} className="w-3 h-3 opacity-0 pointer-events-none" />;
-                    }
-                    const count = countMap[date] ?? 0;
+        <div className="overflow-x-auto">
+          <table className="border-separate border-spacing-1">
+            <thead>
+              <tr>
+                {/* month label column */}
+                <th className="w-14" />
+                {DOW_LABELS.map((d) => (
+                  <th key={d} className="w-8 text-[10px] font-medium text-zinc-500 text-center pb-1">
+                    {d}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {months.map((mo) => (
+                <tr key={mo}>
+                  <td className="text-[10px] font-semibold text-zinc-400 pr-2 text-right whitespace-nowrap">
+                    {monthLabel(mo)}
+                  </td>
+                  {[1, 2, 3, 4, 5, 6, 7].map((dow) => {
+                    const count = countMap[mo]?.[dow] ?? 0;
                     return (
-                      <div
-                        key={di}
-                        className={`w-3 h-3 rounded-sm cursor-default transition-opacity hover:opacity-80 ${cellColor(count)}`}
-                        onMouseEnter={(e) => {
-                          const rect = (e.target as HTMLElement).getBoundingClientRect();
-                          setHovered({ date, count, x: rect.left + window.scrollX, y: rect.top + window.scrollY });
-                        }}
-                        onMouseLeave={() => setHovered(null)}
-                      />
+                      <td key={dow} className="p-0">
+                        <div
+                          className={`w-8 h-8 rounded-lg cursor-default transition-opacity hover:opacity-75 ${cellColor(count)}`}
+                          onMouseEnter={(e) => {
+                            const rect = (e.target as HTMLElement).getBoundingClientRect();
+                            setHovered({
+                              label: `${monthLabel(mo)} ${DOW_LABELS[dow - 1]}`,
+                              count,
+                              x: rect.left + window.scrollX,
+                              y: rect.top + window.scrollY,
+                            });
+                          }}
+                          onMouseLeave={() => setHovered(null)}
+                        />
+                      </td>
                     );
                   })}
-                </div>
-              );
-            })}
-          </div>
+                </tr>
+              ))}
+            </tbody>
+          </table>
 
           {/* Legend */}
           <div className="flex items-center gap-1.5 mt-3 justify-end">
             <span className="text-[9px] text-zinc-600">Az</span>
             {["bg-zinc-800", "bg-green-300", "bg-green-500", "bg-green-700", "bg-green-900"].map((cls) => (
-              <div key={cls} className={`w-3 h-3 rounded-sm ${cls}`} />
+              <div key={cls} className={`w-4 h-4 rounded ${cls}`} />
             ))}
             <span className="text-[9px] text-zinc-600">Çok</span>
           </div>
@@ -1016,20 +978,16 @@ function PostingHeatmapSection() {
         <div
           className="fixed z-50 pointer-events-none px-2.5 py-1.5 rounded-lg text-xs text-white shadow-xl"
           style={{
-            left: hovered.x + 8,
-            top: hovered.y - 36,
+            left: hovered.x + 10,
+            top: hovered.y - 38,
             background: "rgba(20,20,28,0.95)",
             border: "1px solid rgba(255,255,255,0.12)",
           }}
         >
-          <span className="text-zinc-300">
-            {new Date(hovered.date + "T00:00:00").toLocaleDateString("tr-TR", { day: "numeric", month: "short" })}
-          </span>
+          <span className="text-zinc-300">{hovered.label}</span>
           {" · "}
           <span className={hovered.count > 0 ? "text-green-400 font-semibold" : "text-zinc-500"}>
-            {hovered.count > 0
-              ? `${hovered.count} post`
-              : "post yok"}
+            {hovered.count > 0 ? `${hovered.count} post` : "post yok"}
           </span>
         </div>
       )}
