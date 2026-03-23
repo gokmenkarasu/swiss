@@ -980,7 +980,7 @@ function PostingHeatmapSection() {
                   {/* Cells */}
                   {week.map((date, di) => {
                     if (!date) {
-                      return <div key={di} className="w-3 h-3" />;
+                      return <div key={di} className="w-3 h-3 opacity-0 pointer-events-none" />;
                     }
                     const count = countMap[date] ?? 0;
                     return (
