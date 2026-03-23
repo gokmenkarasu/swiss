@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, Component, ReactNode } from "react";
+import React, { useState, useCallback, useEffect, Component, ReactNode } from "react";
 
 // ─── ERROR BOUNDARY ───────────────────────────────────────────────────────────
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
@@ -36,7 +36,7 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 
-type Tab = "gaps" | "radar" | "instagram" | "content" | "venues" | "demand";
+type Tab = "gaps" | "radar" | "instagram" | "content" | "venues" | "demand" | "reviews";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "gaps", label: "Fırsat Boşlukları" },
@@ -45,6 +45,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "content", label: "Engagement" },
   { id: "venues", label: "Mekan Pulse" },
   { id: "demand", label: "İstanbul Sinyalleri" },
+  { id: "reviews", label: "⭐ İtibar Skoru" },
 ];
 
 const urgencyConfig = {
@@ -282,6 +283,193 @@ function VenuesTab() {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ─── REVIEWS TAB ─────────────────────────────────────────────────────────────
+
+const HOTEL_META: Record<string, { label: string; color: string; isSelf?: boolean }> = {
+  swissotel:   { label: "Swissotel The Bosphorus", color: "#c9a84c", isSelf: true },
+  conrad:      { label: "Conrad İstanbul",          color: "#3b82f6" },
+  grandhyatt:  { label: "Grand Hyatt",              color: "#8b5cf6" },
+  mandarin:    { label: "Mandarin Oriental",         color: "#ef4444" },
+  fourseasons: { label: "Four Seasons",             color: "#22c55e" },
+  rixos:       { label: "Rixos Tersane",            color: "#f59e0b" },
+  ritzcarlton: { label: "Ritz-Carlton",             color: "#06b6d4" },
+  hilton:      { label: "Hilton İstanbul",          color: "#ec4899" },
+};
+
+interface HotelReviewRow {
+  hotel_key: string;
+  platform: string;
+  rating: number;
+  reviews_count: number;
+  items: { review_text: string; time_ago: string; rating: number; profile_name: string; owner_answer?: string }[];
+  fetched_at: string;
+}
+
+function ReviewsTab() {
+  const [data, setData] = React.useState<HotelReviewRow[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [refreshing, setRefreshing] = React.useState(false);
+  const [selected, setSelected] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    fetch("/api/competitor-reviews")
+      .then((r) => r.json())
+      .then((d) => { setData(d.reviews ?? []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  async function refresh() {
+    setRefreshing(true);
+    try {
+      const r = await fetch("/api/competitor-reviews?action=refresh", { method: "POST" });
+      const d = await r.json();
+      setData(d.reviews ?? []);
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  const maxReviews = Math.max(...data.map((d) => d.reviews_count ?? 0), 1);
+  const selectedData = data.find((d) => d.hotel_key === selected);
+  const fetchedAt = data[0]?.fetched_at ? new Date(data[0].fetched_at).toLocaleDateString("tr-TR", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : null;
+
+  if (loading) return (
+    <div className="flex items-center justify-center h-48 text-zinc-500 text-sm">Veriler yükleniyor…</div>
+  );
+
+  if (data.length === 0) return (
+    <div className="flex flex-col items-center justify-center h-48 gap-3">
+      <p className="text-zinc-400 text-sm">Henüz veri çekilmedi.</p>
+      <button onClick={refresh} disabled={refreshing}
+        className="px-4 py-2 rounded-lg text-sm font-medium text-black"
+        style={{ background: "linear-gradient(135deg,#c9a84c,#e8c660)" }}>
+        {refreshing ? "Çekiliyor…" : "Google'dan Çek"}
+      </button>
+    </div>
+  );
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-white">Google İtibar Skoru</h2>
+          {fetchedAt && <p className="text-xs text-zinc-500 mt-0.5">Son güncelleme: {fetchedAt}</p>}
+        </div>
+        <button onClick={refresh} disabled={refreshing}
+          className="px-3 py-1.5 rounded-lg text-xs font-medium text-black transition-opacity"
+          style={{ background: "linear-gradient(135deg,#c9a84c,#e8c660)", opacity: refreshing ? 0.6 : 1 }}>
+          {refreshing ? "Güncelleniyor…" : "↻ Güncelle"}
+        </button>
+      </div>
+
+      {/* Leaderboard */}
+      <div className="glass rounded-2xl overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.07)" }}>
+        <div className="px-5 py-3 border-b" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+          <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Google Puan Sıralaması</p>
+        </div>
+        <div className="p-3 space-y-2">
+          {data.map((row, i) => {
+            const meta = HOTEL_META[row.hotel_key];
+            if (!meta) return null;
+            const medalColor = i === 0 ? "#FFD700" : i === 1 ? "#C0C0C0" : i === 2 ? "#CD7F32" : "#3f3f46";
+            const barW = Math.round(((row.rating - 4) / 1) * 100);
+            const reviewsPct = Math.round((row.reviews_count / maxReviews) * 100);
+            const isActive = selected === row.hotel_key;
+            return (
+              <div key={row.hotel_key}
+                onClick={() => setSelected(isActive ? null : row.hotel_key)}
+                className="rounded-xl px-4 py-3 cursor-pointer transition-all duration-150"
+                style={{
+                  background: meta.isSelf ? "rgba(201,168,76,0.07)" : isActive ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.025)",
+                  border: `1px solid ${meta.isSelf ? "rgba(201,168,76,0.25)" : isActive ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.05)"}`,
+                }}>
+                <div className="flex items-center gap-3">
+                  {/* Rank */}
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-sm font-bold"
+                    style={{ background: `${medalColor}20`, color: medalColor }}>
+                    {i + 1}
+                  </div>
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-sm font-medium text-white truncate">{meta.label}</span>
+                      {meta.isSelf && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold"
+                          style={{ background: "rgba(201,168,76,0.2)", color: "#c9a84c" }}>SİZ</span>
+                      )}
+                    </div>
+                    {/* Rating bar */}
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.06)" }}>
+                        <div className="h-full rounded-full transition-all duration-500"
+                          style={{ width: `${barW}%`, background: meta.color }} />
+                      </div>
+                      <span className="text-sm font-bold" style={{ color: meta.color }}>
+                        ★ {row.rating?.toFixed(1)}
+                      </span>
+                    </div>
+                    {/* Reviews count bar */}
+                    <div className="flex items-center gap-2 mt-1">
+                      <div className="flex-1 h-1 rounded-full" style={{ background: "rgba(255,255,255,0.04)" }}>
+                        <div className="h-full rounded-full transition-all duration-500"
+                          style={{ width: `${reviewsPct}%`, background: `${meta.color}60` }} />
+                      </div>
+                      <span className="text-[11px] text-zinc-500">
+                        {row.reviews_count?.toLocaleString("tr-TR")} yorum
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Expanded: recent reviews */}
+                {isActive && selectedData?.items && selectedData.items.length > 0 && (
+                  <div className="mt-3 pt-3 border-t space-y-2" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+                    <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-semibold">Son Yorumlar</p>
+                    {selectedData.items.slice(0, 3).map((item, ri) => (
+                      <div key={ri} className="rounded-lg p-3" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs font-medium text-white">{item.profile_name}</span>
+                          <span className="text-[10px]" style={{ color: meta.color }}>{"★".repeat(item.rating)}{"☆".repeat(5 - item.rating)}</span>
+                          <span className="text-[10px] text-zinc-600 ml-auto">{item.time_ago}</span>
+                        </div>
+                        <p className="text-[11px] text-zinc-400 leading-relaxed line-clamp-3">{item.review_text}</p>
+                        {item.owner_answer && (
+                          <div className="mt-2 pl-2 border-l" style={{ borderColor: `${meta.color}40` }}>
+                            <p className="text-[10px] text-zinc-600 font-medium mb-0.5">Yönetim Yanıtı</p>
+                            <p className="text-[10px] text-zinc-500 leading-relaxed line-clamp-2"
+                              dangerouslySetInnerHTML={{ __html: item.owner_answer.replace(/<br>/g, " ") }} />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Summary insight */}
+      {data.length > 0 && (
+        <div className="glass rounded-xl p-4" style={{ border: "1px solid rgba(201,168,76,0.2)" }}>
+          <p className="text-xs text-zinc-400 leading-relaxed">
+            <span className="text-yellow-400 font-semibold">Swissotel rakiplerini geride bırakıyor.</span>{" "}
+            {(() => {
+              const swiss = data.find((d) => d.hotel_key === "swissotel");
+              const others = data.filter((d) => d.hotel_key !== "swissotel");
+              const avgOthers = others.reduce((s, d) => s + d.rating, 0) / (others.length || 1);
+              const diff = swiss ? (swiss.rating - avgOthers).toFixed(2) : "0";
+              return `${swiss?.rating.toFixed(1)} puan ve ${swiss?.reviews_count?.toLocaleString("tr-TR")} yorumla lidersiniz. Rakip ortalaması: ${avgOthers.toFixed(1)} — aranızdaki fark +${diff} puan.`;
+            })()}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -1550,6 +1738,7 @@ export default function Page() {
         )}
         {tab === "venues"    && <VenuesTab />}
         {tab === "demand"    && <DemandTab />}
+        {tab === "reviews"   && <ReviewsTab />}
       </div>
 
       {/* Footer */}

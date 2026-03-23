@@ -324,6 +324,74 @@ export async function getPostingSchedule(): Promise<{ username: string; date: st
   return rows as { username: string; date: string; count: number }[];
 }
 
+// ─── COMPETITOR REVIEWS ─────────────────────────────────────────────────────
+
+export interface HotelReview {
+  hotel_key: string;
+  platform: string;
+  rating: number;
+  reviews_count: number;
+  items: ReviewItem[];
+  fetched_at: string;
+}
+
+export interface ReviewItem {
+  review_text: string;
+  time_ago: string;
+  rating: number;
+  profile_name: string;
+  owner_answer?: string;
+}
+
+export async function initReviewsTable() {
+  await sql`
+    CREATE TABLE IF NOT EXISTS competitor_reviews (
+      id            SERIAL PRIMARY KEY,
+      hotel_key     TEXT NOT NULL,
+      platform      TEXT NOT NULL DEFAULT 'google',
+      rating        NUMERIC(2,1),
+      reviews_count INTEGER,
+      items         JSONB,
+      fetched_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (hotel_key, platform)
+    )
+  `;
+}
+
+export async function upsertHotelReview(
+  hotelKey: string,
+  platform: string,
+  rating: number,
+  reviewsCount: number,
+  items: ReviewItem[]
+) {
+  await sql`
+    INSERT INTO competitor_reviews (hotel_key, platform, rating, reviews_count, items)
+    VALUES (${hotelKey}, ${platform}, ${rating}, ${reviewsCount}, ${JSON.stringify(items)})
+    ON CONFLICT (hotel_key, platform)
+    DO UPDATE SET
+      rating        = EXCLUDED.rating,
+      reviews_count = EXCLUDED.reviews_count,
+      items         = EXCLUDED.items,
+      fetched_at    = NOW()
+  `;
+}
+
+export async function getHotelReviews(): Promise<HotelReview[]> {
+  const rows = await sql`
+    SELECT hotel_key, platform,
+           CAST(rating AS float) AS rating,
+           reviews_count,
+           items,
+           fetched_at::text
+    FROM competitor_reviews
+    ORDER BY rating DESC NULLS LAST
+  `;
+  return rows as HotelReview[];
+}
+
+// ─── CONTENT STATS ───────────────────────────────────────────────────────────
+
 export async function getLatestContentStats(): Promise<ContentStat[]> {
   const rows = await sql`
     SELECT DISTINCT ON (username)
