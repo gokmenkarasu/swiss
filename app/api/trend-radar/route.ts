@@ -11,8 +11,8 @@ const BASE = "https://api.dataforseo.com/v3";
 
 const ALERT_THRESHOLD = 30; // trendPct >= 30 → alert
 
-const TRACKED: { keyword: string; geo: string; label: string; locationName: string }[] = [
-  { keyword: "istanbul luxury hotel", geo: "TR", label: "Istanbul Luxury Hotel", locationName: "Türkiye" },
+const TRACKED: { keyword: string; geo: string; label: string; locationName?: string }[] = [
+  { keyword: "istanbul luxury hotel", geo: "TR", label: "Istanbul Luxury Hotel" }, // geo filter not supported for TR
   { keyword: "istanbul luxury hotel", geo: "DE", label: "Istanbul Luxury Hotel", locationName: "Germany" },
   { keyword: "istanbul luxury hotel", geo: "GB", label: "Istanbul Luxury Hotel", locationName: "United Kingdom" },
   { keyword: "istanbul luxury hotel", geo: "US", label: "Istanbul Luxury Hotel", locationName: "United States" },
@@ -73,7 +73,7 @@ export async function POST(req: Request) {
         body: JSON.stringify([
           {
             keywords: [item.keyword],
-            location_name: item.locationName,
+            ...(item.locationName ? { location_name: item.locationName } : {}),
             time_range: "past_7_days",
             type: "web",
           },
