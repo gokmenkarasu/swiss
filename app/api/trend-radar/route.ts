@@ -73,7 +73,7 @@ export async function POST(req: Request) {
           {
             keywords: [item.keyword],
             location_name: item.locationName,
-            time_range: "past_90_days",
+            time_range: "past_month",
             type: "web",
           },
         ]),
