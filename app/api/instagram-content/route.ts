@@ -70,7 +70,9 @@ function resolveComments(p: ApifyPost): number {
 }
 
 function resolveViews(p: ApifyPost): number {
-  return Number(p.videoViewCount ?? p.videoPlayCount ?? p.viewCount ?? p.playCount ?? 0);
+  // Instagram displays play count (total plays), not view count (unique viewers)
+  // videoPlayCount matches the number shown on the post; videoViewCount is unique viewers
+  return Number(p.videoPlayCount ?? p.playCount ?? p.videoViewCount ?? p.viewCount ?? 0);
 }
 
 function resolvePostId(p: ApifyPost): string {
@@ -131,6 +133,9 @@ async function scrapeUserPosts(username: string): Promise<ApifyPost[]> {
       likesCount: items[0].likesCount,
       commentsCount: items[0].commentsCount,
       videoViewCount: items[0].videoViewCount,
+      videoPlayCount: items[0].videoPlayCount,
+      viewCount: items[0].viewCount,
+      playCount: items[0].playCount,
       timestamp: items[0].timestamp,
       takenAtTimestamp: items[0].takenAtTimestamp,
     });
