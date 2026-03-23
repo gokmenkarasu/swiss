@@ -8,6 +8,7 @@ import {
   getPostStats,
   getPostStatsByRange,
   getLatestFetchDate,
+  getScrapedUsernames,
 } from "@/lib/db";
 
 const APIFY_TOKEN = process.env.APIFY_API_TOKEN;
@@ -184,20 +185,22 @@ export async function GET(req: NextRequest) {
       ? await getPostStatsByRange(from, to)
       : await getPostStats(days);
 
+    // Always include which usernames have ever been scraped
+    const scrapedUsernames = await getScrapedUsernames();
+
     if (postStats.length > 0) {
-      // Add last_fetch per username
       const withFetch = await Promise.all(
         postStats.map(async (s) => ({
           ...s,
           last_fetch: await getLatestFetchDate(s.username),
         }))
       );
-      return NextResponse.json({ stats: withFetch, source: "posts", days, from, to });
+      return NextResponse.json({ stats: withFetch, scraped: scrapedUsernames, source: "posts", days, from, to });
     }
 
     // Fallback: aggregate content stats (no date filter)
     const stats = await getLatestContentStats();
-    return NextResponse.json({ stats, source: "content_stats", days });
+    return NextResponse.json({ stats, scraped: scrapedUsernames, source: "content_stats", days });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

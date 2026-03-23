@@ -211,6 +211,11 @@ export async function getPostStatsByRange(from: string, to: string): Promise<Pos
   return rows as PostStats[];
 }
 
+export async function getScrapedUsernames(): Promise<string[]> {
+  const rows = await sql`SELECT DISTINCT username FROM instagram_posts`;
+  return rows.map((r) => r.username as string);
+}
+
 export async function getLatestFetchDate(username: string): Promise<string | null> {
   const rows = await sql`
     SELECT MAX(fetched_at)::text AS last_fetch

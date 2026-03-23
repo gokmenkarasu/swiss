@@ -530,6 +530,7 @@ function ContentIntelligenceTab() {
   const [showCustom, setShowCustom] = useState(false);
 
   const [stats, setStats]           = useState<EngStat[]>([]);
+  const [scrapedSet, setScrapedSet] = useState<Set<string>>(new Set());
   const [latestSnaps, setLatestSnaps] = useState<Snapshot[]>([]);
   const [loading, setLoading]       = useState(false);
   const [fetchingHandle, setFetchingHandle] = useState<string | null>(null);
@@ -564,6 +565,7 @@ function ContentIntelligenceTab() {
       const contentData = await contentRes.json().catch(() => ({}));
       const snapData    = await snapRes.json().catch(() => ({}));
       setStats(contentData.stats ?? []);
+      setScrapedSet(new Set(contentData.scraped ?? []));
       setLatestSnaps(snapData.latest ?? []);
     } catch (e) {
       setLoadError(String(e));
@@ -947,8 +949,13 @@ function ContentIntelligenceTab() {
                           )}
                         </div>
                       </>
+                    ) : scrapedSet.has(c.instagramHandle) ? (
+                      /* Scraped before but no posts in this date range */
+                      <p className="text-xs text-zinc-600 py-3">
+                        Bu dönemde post yok
+                      </p>
                     ) : (
-                      /* No data — show fetch button centered */
+                      /* Never scraped — show fetch button */
                       <div className="flex flex-col items-center gap-2 py-3">
                         <p className="text-xs text-zinc-600">Henüz veri yok</p>
                         <button
