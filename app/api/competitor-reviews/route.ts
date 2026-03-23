@@ -33,7 +33,8 @@ async function dfsGet(path: string) {
 
 export async function GET() {
   await initReviewsTable();
-  const reviews = await getHotelReviews();
+  const all = await getHotelReviews();
+  const reviews = all.filter((r) => r.platform === "google");
   return NextResponse.json({ reviews });
 }
 
