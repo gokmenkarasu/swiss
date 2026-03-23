@@ -352,6 +352,7 @@ function ContentIntelligenceTab() {
 
   const [stats, setStats]           = useState<EngStat[]>([]);
   const [scrapedSet, setScrapedSet] = useState<Set<string>>(new Set());
+  const [failedSet, setFailedSet]   = useState<Set<string>>(new Set()); // fetched but 0 posts
   const [latestSnaps, setLatestSnaps] = useState<Snapshot[]>([]);
   const [loading, setLoading]       = useState(false);
   const [fetchingHandle, setFetchingHandle] = useState<string | null>(null);
@@ -419,8 +420,13 @@ function ContentIntelligenceTab() {
       clearTimeout(timeoutId);
       const d = await res.json().catch(() => ({ error: "Geçersiz yanıt" }));
       if (d.error) throw new Error(d.error);
-      setMsg(`✓ ${username} — ${d.posts_scraped} post kaydedildi`);
-      load(days);
+      if (!d.posts_scraped || d.posts_scraped === 0) {
+        setFailedSet((prev) => new Set(prev).add(username));
+        setMsg(`⚠️ ${username} — post çekilemedi (hesap kısıtlı olabilir)`);
+      } else {
+        setMsg(`✓ ${username} — ${d.posts_scraped} post kaydedildi`);
+        load(days);
+      }
     } catch (e) {
       if (String(e).includes("aborted") || String(e).includes("abort")) {
         setMsg("⏱ Zaman aşımı — Apify çok uzun sürdü. Manuel giriş kullanın.");
@@ -771,9 +777,12 @@ function ContentIntelligenceTab() {
                         </div>
                       </>
                     ) : scrapedSet.has(c.instagramHandle) ? (
-                      /* Scraped before but no posts in this date range */
+                      /* Scraped but no posts in selected date range */
+                      <p className="text-xs text-zinc-600 py-3">Bu dönemde post yok</p>
+                    ) : failedSet.has(c.instagramHandle) ? (
+                      /* Fetch attempted but Apify returned 0 real posts */
                       <p className="text-xs text-zinc-600 py-3">
-                        Bu dönemde post yok
+                        Veri çekilemedi — hesap Apify tarafından okunamıyor
                       </p>
                     ) : (
                       /* Never scraped — show fetch button */
