@@ -867,11 +867,11 @@ function weekStartLabel(weekKey: string): string {
 }
 
 function PostingHeatmapSection() {
-  const [data, setData]           = useState<ScheduleRow[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [selected, setSelected]   = useState<string | null>(null);
-  const [view, setView]           = useState<"monthly" | "weekly">("monthly");
-  const [hovered, setHovered]     = useState<{ label: string; count: number; x: number; y: number } | null>(null);
+  const [data, setData]         = useState<ScheduleRow[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [view, setView]         = useState<"monthly" | "weekly">("monthly");
+  const [hovered, setHovered]   = useState<{ label: string; count: number; x: number; y: number } | null>(null);
 
   useEffect(() => {
     fetch("/api/instagram-posting-schedule")
@@ -880,29 +880,39 @@ function PostingHeatmapSection() {
       .catch(() => setLoading(false));
   }, []);
 
-  // Build aggregated map: rowKey → { [dow 1..7]: count }
-  const rowMap: Record<string, Record<number, number>> = {};
+  // date-level map: "YYYY-MM-DD" → total count (filtered)
+  const dateMap: Record<string, number> = {};
+  for (const row of data) {
+    if (selected !== null && row.username !== selected) continue;
+    dateMap[row.date] = (dateMap[row.date] ?? 0) + row.count;
+  }
+
+  // weekly map: weekKey → { dow: count }
+  const weekMap: Record<string, Record<number, number>> = {};
   for (const row of data) {
     if (selected !== null && row.username !== selected) continue;
     const d   = new Date(row.date + "T00:00:00");
-    const dow = d.getDay() === 0 ? 7 : d.getDay(); // 1=Mon … 7=Sun
-    const key = view === "monthly"
-      ? row.date.slice(0, 7)          // "YYYY-MM"
-      : isoWeekKey(row.date);         // "YYYY-Www"
-    if (!rowMap[key]) rowMap[key] = {};
-    rowMap[key][dow] = (rowMap[key][dow] ?? 0) + row.count;
+    const dow = d.getDay() === 0 ? 7 : d.getDay();
+    const key = isoWeekKey(row.date);
+    if (!weekMap[key]) weekMap[key] = {};
+    weekMap[key][dow] = (weekMap[key][dow] ?? 0) + row.count;
   }
 
-  const rows = Object.keys(rowMap).sort();
-  const totalPosts = Object.values(rowMap).flatMap((m) => Object.values(m)).reduce((a, b) => a + b, 0);
+  // Months present in data
+  const monthSet = new Set(Object.keys(dateMap).map((d) => d.slice(0, 7)));
+  const months   = Array.from(monthSet).sort();
+  const weeks    = Object.keys(weekMap).sort();
 
-  const rowLabel = (key: string) => {
-    if (view === "monthly") {
-      const [y, m] = key.split("-");
-      return new Date(Number(y), Number(m) - 1, 1)
-        .toLocaleDateString("tr-TR", { month: "short", year: "2-digit" });
-    }
-    return weekStartLabel(key);
+  const totalPosts = Object.values(dateMap).reduce((a, b) => a + b, 0);
+
+  const daysInMonth = (ym: string) => {
+    const [y, m] = ym.split("-").map(Number);
+    return new Date(y, m, 0).getDate(); // last day of month
+  };
+
+  const monthLabel = (ym: string) => {
+    const [y, m] = ym.split("-").map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString("tr-TR", { month: "short", year: "2-digit" });
   };
 
   return (
@@ -913,17 +923,11 @@ function PostingHeatmapSection() {
           <h4 className="text-sm font-semibold text-white/80">Paylaşım Takvimi</h4>
           <p className="text-xs text-zinc-500 mt-0.5">{totalPosts} post · son 6 ay</p>
         </div>
-        {/* View toggle */}
         <div className="flex rounded-xl overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
           {(["monthly", "weekly"] as const).map((v) => (
-            <button
-              key={v}
-              onClick={() => setView(v)}
-              className={`text-xs px-3 py-1.5 transition-all ${
-                view === v ? "text-amber-300 font-semibold" : "text-zinc-500 hover:text-zinc-300"
-              }`}
-              style={view === v ? { background: "rgba(201,168,76,0.18)" } : {}}
-            >
+            <button key={v} onClick={() => setView(v)}
+              className={`text-xs px-3 py-1.5 transition-all ${view === v ? "text-amber-300 font-semibold" : "text-zinc-500 hover:text-zinc-300"}`}
+              style={view === v ? { background: "rgba(201,168,76,0.18)" } : {}}>
               {v === "monthly" ? "Aylık" : "Haftalık"}
             </button>
           ))}
@@ -932,26 +936,14 @@ function PostingHeatmapSection() {
 
       {/* Filter chips */}
       <div className="flex flex-wrap gap-1.5">
-        <button
-          onClick={() => setSelected(null)}
-          className={`text-xs px-3 py-1 rounded-full transition-all ${
-            selected === null
-              ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-              : "text-zinc-500 border border-zinc-700 hover:text-zinc-300"
-          }`}
-        >
+        <button onClick={() => setSelected(null)}
+          className={`text-xs px-3 py-1 rounded-full transition-all ${selected === null ? "bg-amber-500/20 text-amber-300 border border-amber-500/40" : "text-zinc-500 border border-zinc-700 hover:text-zinc-300"}`}>
           Tümü
         </button>
         {competitors.map((c) => (
-          <button
-            key={c.instagramHandle}
+          <button key={c.instagramHandle}
             onClick={() => setSelected(selected === c.instagramHandle ? null : c.instagramHandle)}
-            className={`text-xs px-3 py-1 rounded-full transition-all ${
-              selected === c.instagramHandle
-                ? "bg-green-500/20 text-green-300 border border-green-500/40"
-                : "text-zinc-500 border border-zinc-700 hover:text-zinc-300"
-            }`}
-          >
+            className={`text-xs px-3 py-1 rounded-full transition-all ${selected === c.instagramHandle ? "bg-green-500/20 text-green-300 border border-green-500/40" : "text-zinc-500 border border-zinc-700 hover:text-zinc-300"}`}>
             {c.shortName}
           </button>
         ))}
@@ -959,41 +951,80 @@ function PostingHeatmapSection() {
 
       {loading ? (
         <div className="text-xs text-zinc-600 py-4 text-center">Yükleniyor…</div>
-      ) : rows.length === 0 ? (
+      ) : (months.length === 0 && weeks.length === 0) ? (
         <div className="text-xs text-zinc-600 py-4 text-center">Henüz post verisi yok</div>
+      ) : view === "monthly" ? (
+        /* ── MONTHLY: rows = months, cols = day 1..N of that month ── */
+        <div className="space-y-1.5">
+          {/* Day number header — 1..31, show every 5 */}
+          <div className="flex items-center gap-1">
+            <div className="w-14 shrink-0" />
+            <div className="flex flex-1 gap-px">
+              {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                <div key={d} className="flex-1 text-center text-[9px] text-zinc-600">
+                  {d === 1 || d % 5 === 0 ? d : ""}
+                </div>
+              ))}
+            </div>
+          </div>
+          {months.map((ym) => {
+            const days = daysInMonth(ym);
+            return (
+              <div key={ym} className="flex items-center gap-1">
+                <div className="w-14 shrink-0 text-[10px] font-semibold text-zinc-400 text-right pr-2">
+                  {monthLabel(ym)}
+                </div>
+                <div className="flex flex-1 gap-px">
+                  {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => {
+                    if (d > days) {
+                      return <div key={d} className="flex-1 aspect-square opacity-0 pointer-events-none" />;
+                    }
+                    const dateStr = `${ym}-${String(d).padStart(2, "0")}`;
+                    const count   = dateMap[dateStr] ?? 0;
+                    return (
+                      <div
+                        key={d}
+                        className={`flex-1 aspect-square rounded-sm cursor-default transition-opacity hover:opacity-75 ${heatmapColor(count)}`}
+                        onMouseEnter={(e) => {
+                          const rect = (e.target as HTMLElement).getBoundingClientRect();
+                          setHovered({ label: `${d} ${monthLabel(ym)}`, count, x: rect.left + window.scrollX, y: rect.top + window.scrollY });
+                        }}
+                        onMouseLeave={() => setHovered(null)}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       ) : (
+        /* ── WEEKLY: rows = weeks, cols = Pzt..Paz ── */
         <div className="overflow-x-auto">
           <table className="border-separate border-spacing-1">
             <thead>
               <tr>
                 <th className="w-16" />
                 {DOW_LABELS.map((d) => (
-                  <th key={d} className="w-8 text-[10px] font-medium text-zinc-500 text-center pb-1">
-                    {d}
-                  </th>
+                  <th key={d} className="w-8 text-[10px] font-medium text-zinc-500 text-center pb-1">{d}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {rows.map((key) => (
+              {weeks.map((key) => (
                 <tr key={key}>
                   <td className="text-[10px] font-semibold text-zinc-400 pr-2 text-right whitespace-nowrap">
-                    {rowLabel(key)}
+                    {weekStartLabel(key)}
                   </td>
                   {[1, 2, 3, 4, 5, 6, 7].map((dow) => {
-                    const count = rowMap[key]?.[dow] ?? 0;
+                    const count = weekMap[key]?.[dow] ?? 0;
                     return (
                       <td key={dow} className="p-0">
                         <div
                           className={`w-8 h-8 rounded-lg cursor-default transition-opacity hover:opacity-75 ${heatmapColor(count)}`}
                           onMouseEnter={(e) => {
                             const rect = (e.target as HTMLElement).getBoundingClientRect();
-                            setHovered({
-                              label: `${rowLabel(key)} · ${DOW_LABELS[dow - 1]}`,
-                              count,
-                              x: rect.left + window.scrollX,
-                              y: rect.top + window.scrollY,
-                            });
+                            setHovered({ label: `${weekStartLabel(key)} · ${DOW_LABELS[dow - 1]}`, count, x: rect.left + window.scrollX, y: rect.top + window.scrollY });
                           }}
                           onMouseLeave={() => setHovered(null)}
                         />
@@ -1004,29 +1035,22 @@ function PostingHeatmapSection() {
               ))}
             </tbody>
           </table>
-
-          {/* Legend */}
-          <div className="flex items-center gap-1.5 mt-3 justify-end">
-            <span className="text-[9px] text-zinc-600">Az</span>
-            {["bg-zinc-800", "bg-green-300", "bg-green-500", "bg-green-700", "bg-green-900"].map((cls) => (
-              <div key={cls} className={`w-4 h-4 rounded ${cls}`} />
-            ))}
-            <span className="text-[9px] text-zinc-600">Çok</span>
-          </div>
         </div>
       )}
 
+      {/* Legend */}
+      <div className="flex items-center gap-1.5 justify-end">
+        <span className="text-[9px] text-zinc-600">Az</span>
+        {["bg-zinc-800", "bg-green-300", "bg-green-500", "bg-green-700", "bg-green-900"].map((cls) => (
+          <div key={cls} className={`w-3.5 h-3.5 rounded ${cls}`} />
+        ))}
+        <span className="text-[9px] text-zinc-600">Çok</span>
+      </div>
+
       {/* Tooltip */}
       {hovered && (
-        <div
-          className="fixed z-50 pointer-events-none px-2.5 py-1.5 rounded-lg text-xs text-white shadow-xl"
-          style={{
-            left: hovered.x + 10,
-            top: hovered.y - 38,
-            background: "rgba(20,20,28,0.95)",
-            border: "1px solid rgba(255,255,255,0.12)",
-          }}
-        >
+        <div className="fixed z-50 pointer-events-none px-2.5 py-1.5 rounded-lg text-xs text-white shadow-xl"
+          style={{ left: hovered.x + 10, top: hovered.y - 38, background: "rgba(20,20,28,0.95)", border: "1px solid rgba(255,255,255,0.12)" }}>
           <span className="text-zinc-300">{hovered.label}</span>
           {" · "}
           <span className={hovered.count > 0 ? "text-green-400 font-semibold" : "text-zinc-500"}>
