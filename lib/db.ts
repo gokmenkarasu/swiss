@@ -158,6 +158,27 @@ export async function getPostStats(days: number): Promise<PostStats[]> {
   return rows as PostStats[];
 }
 
+export async function getPostStatsByRange(from: string, to: string): Promise<PostStats[]> {
+  const rows = await sql`
+    SELECT
+      username,
+      COUNT(*)::int                                            AS total_posts,
+      COUNT(*) FILTER (WHERE post_type = 'Image')::int        AS photo_count,
+      COUNT(*) FILTER (WHERE post_type = 'Video')::int        AS video_count,
+      COUNT(*) FILTER (WHERE post_type = 'Sidecar')::int      AS carousel_count,
+      ROUND(AVG(likes_count), 2)                              AS avg_likes,
+      ROUND(AVG(comments_count), 2)                           AS avg_comments,
+      ROUND(AVG(CASE WHEN views_count > 0 THEN views_count END), 2) AS avg_views,
+      MAX(posted_at)::text                                    AS latest_post_at,
+      MIN(posted_at)::text                                    AS oldest_post_at
+    FROM instagram_posts
+    WHERE posted_at >= ${from}::date
+      AND posted_at <  (${to}::date + INTERVAL '1 day')
+    GROUP BY username
+  `;
+  return rows as PostStats[];
+}
+
 export async function getLatestFetchDate(username: string): Promise<string | null> {
   const rows = await sql`
     SELECT MAX(fetched_at)::text AS last_fetch

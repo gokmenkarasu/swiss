@@ -517,8 +517,18 @@ const DAY_OPTIONS = [
 
 type EngStat = (ContentStat | PostStats) & { last_fetch?: string | null };
 
+// Today as YYYY-MM-DD in local time
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function ContentIntelligenceTab() {
-  const [days, setDays]             = useState(30);
+  const [days, setDays]             = useState<number | null>(30);
+  const [dateFrom, setDateFrom]     = useState("");
+  const [dateTo, setDateTo]         = useState("");
+  const [showCustom, setShowCustom] = useState(false);
+
   const [stats, setStats]           = useState<EngStat[]>([]);
   const [latestSnaps, setLatestSnaps] = useState<Snapshot[]>([]);
   const [loading, setLoading]       = useState(false);
@@ -537,12 +547,18 @@ function ContentIntelligenceTab() {
   const [mComments, setMComments]   = useState("");
   const [mViews, setMViews]         = useState("");
 
-  const load = useCallback(async (d: number) => {
+  const load = useCallback(async (d: number | null, from?: string, to?: string) => {
     setLoading(true);
     setLoadError(null);
     try {
+      let url = "/api/instagram-content";
+      if (from && to) {
+        url += `?from=${from}&to=${to}`;
+      } else {
+        url += `?days=${d ?? 30}`;
+      }
       const [contentRes, snapRes] = await Promise.all([
-        fetch(`/api/instagram-content?days=${d}`),
+        fetch(url),
         fetch("/api/instagram-history?days=1"),
       ]);
       const contentData = await contentRes.json().catch(() => ({}));
@@ -557,6 +573,12 @@ function ContentIntelligenceTab() {
   }, []);
 
   useEffect(() => { load(days); }, [load, days]);
+
+  const applyCustomRange = () => {
+    if (!dateFrom || !dateTo) return;
+    setDays(null);
+    load(null, dateFrom, dateTo);
+  };
 
   const fetchOne = async (username: string) => {
     const snap = latestSnaps.find((s) => s.username === username);
@@ -643,28 +665,45 @@ function ContentIntelligenceTab() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h3 className="font-semibold text-white/90">Engagement Intelligence</h3>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Day filter */}
+          {/* Preset day filter */}
           <div className="flex rounded-xl overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
             {DAY_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
-                onClick={() => setDays(opt.value)}
+                onClick={() => { setDays(opt.value); setShowCustom(false); setDateFrom(""); setDateTo(""); }}
                 className={`text-xs px-3 py-1.5 transition-all ${
-                  days === opt.value
+                  days === opt.value && !showCustom
                     ? "text-amber-300 font-semibold"
                     : "text-zinc-500 hover:text-zinc-300"
                 }`}
-                style={days === opt.value ? { background: "rgba(201,168,76,0.18)" } : {}}
+                style={days === opt.value && !showCustom ? { background: "rgba(201,168,76,0.18)" } : {}}
               >
                 {opt.label}
               </button>
             ))}
           </div>
+
+          {/* Custom date range toggle */}
+          <button
+            onClick={() => { setShowCustom(!showCustom); if (!showCustom) { setDays(null); setDateTo(todayStr()); } }}
+            className={`text-xs px-3 py-1.5 rounded-xl transition-all ${
+              showCustom
+                ? "text-amber-300 font-semibold"
+                : "text-zinc-500 hover:text-zinc-300"
+            }`}
+            style={{
+              border: "1px solid rgba(255,255,255,0.08)",
+              background: showCustom ? "rgba(201,168,76,0.18)" : undefined,
+            }}
+          >
+            📅 Tarih seç
+          </button>
+
           <button
             onClick={() => setShowManual(!showManual)}
             className={`text-xs px-3 py-1.5 rounded-lg transition-all ${
@@ -677,6 +716,46 @@ function ContentIntelligenceTab() {
           </button>
         </div>
       </div>
+
+      {/* Custom date range picker */}
+      {showCustom && (
+        <div className="flex items-center gap-3 flex-wrap glass rounded-xl px-4 py-3"
+          style={{ border: "1px solid rgba(201,168,76,0.2)" }}>
+          <span className="text-xs text-zinc-400">Başlangıç</span>
+          <input
+            type="date"
+            value={dateFrom}
+            max={dateTo || todayStr()}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="bg-transparent border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-amber-500/50"
+            style={{ colorScheme: "dark" }}
+          />
+          <span className="text-xs text-zinc-600">—</span>
+          <span className="text-xs text-zinc-400">Bitiş</span>
+          <input
+            type="date"
+            value={dateTo}
+            min={dateFrom}
+            max={todayStr()}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="bg-transparent border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-amber-500/50"
+            style={{ colorScheme: "dark" }}
+          />
+          <button
+            onClick={applyCustomRange}
+            disabled={!dateFrom || !dateTo}
+            className="text-xs px-4 py-1.5 rounded-lg font-semibold text-black disabled:opacity-40"
+            style={{ background: "linear-gradient(135deg,#c9a84c,#e8c660)" }}
+          >
+            Uygula
+          </button>
+          {dateFrom && dateTo && (
+            <span className="text-[10px] text-zinc-600">
+              {dateFrom} → {dateTo}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Manual form */}
       {showManual && (

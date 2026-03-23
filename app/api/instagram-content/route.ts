@@ -6,6 +6,7 @@ import {
   upsertPost,
   getLatestContentStats,
   getPostStats,
+  getPostStatsByRange,
   getLatestFetchDate,
 } from "@/lib/db";
 
@@ -167,11 +168,15 @@ export async function GET(req: NextRequest) {
   try {
     await Promise.all([initContentStatsTable(), initPostsTable()]);
 
-    const url = new URL(req.url);
+    const url  = new URL(req.url);
+    const from = url.searchParams.get("from");
+    const to   = url.searchParams.get("to");
     const days = parseInt(url.searchParams.get("days") ?? "30", 10);
 
     // Try post-based stats first (richer, date-filtered)
-    const postStats = await getPostStats(days);
+    const postStats = from && to
+      ? await getPostStatsByRange(from, to)
+      : await getPostStats(days);
 
     if (postStats.length > 0) {
       // Add last_fetch per username
@@ -181,7 +186,7 @@ export async function GET(req: NextRequest) {
           last_fetch: await getLatestFetchDate(s.username),
         }))
       );
-      return NextResponse.json({ stats: withFetch, source: "posts", days });
+      return NextResponse.json({ stats: withFetch, source: "posts", days, from, to });
     }
 
     // Fallback: aggregate content stats (no date filter)
