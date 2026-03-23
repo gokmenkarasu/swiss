@@ -955,52 +955,49 @@ function PostingHeatmapSection() {
         <div className="text-xs text-zinc-600 py-4 text-center">Henüz post verisi yok</div>
       ) : view === "monthly" ? (
         /* ── MONTHLY: rows = months, cols = day 1..N of that month ── */
-        (() => {
-          const DOW_SHORT = ["Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pz"]; // Mon=0 … Sun=6
-          const startDow = (ym: string) => {
-            const [y, m] = ym.split("-").map(Number);
-            return (new Date(y, m - 1, 1).getDay() + 6) % 7; // 0=Mon
-          };
-          return (
-            <div className="space-y-2">
-              {months.map((ym) => {
-                const days  = daysInMonth(ym);
-                const start = startDow(ym);
-                return (
-                  <div key={ym} className="flex items-start gap-1">
-                    <div className="w-14 shrink-0 text-[10px] font-semibold text-zinc-400 text-right pr-2 pt-4">
-                      {monthLabel(ym)}
-                    </div>
-                    <div className="flex flex-1 gap-px">
-                      {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => {
-                        if (d > days) {
-                          return <div key={d} className="flex-1 opacity-0 pointer-events-none" style={{ aspectRatio: "1" }} />;
-                        }
-                        const dow     = (start + d - 1) % 7;
-                        const dateStr = `${ym}-${String(d).padStart(2, "0")}`;
-                        const count   = dateMap[dateStr] ?? 0;
-                        return (
-                          <div key={d} className="flex-1 flex flex-col items-center gap-0.5">
-                            <span className="text-[8px] text-zinc-600 leading-none">{DOW_SHORT[dow]}</span>
-                            <div
-                              className={`w-full rounded-sm cursor-default transition-opacity hover:opacity-75 ${heatmapColor(count)}`}
-                              style={{ aspectRatio: "1" }}
-                              onMouseEnter={(e) => {
-                                const rect = (e.target as HTMLElement).getBoundingClientRect();
-                                setHovered({ label: `${d} ${monthLabel(ym)} · ${DOW_SHORT[dow]}`, count, x: rect.left + window.scrollX, y: rect.top + window.scrollY });
-                              }}
-                              onMouseLeave={() => setHovered(null)}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
+        <div className="space-y-1.5">
+          {/* Day number header — 1..31, show every 5 */}
+          <div className="flex items-center gap-1">
+            <div className="w-14 shrink-0" />
+            <div className="flex flex-1 gap-px">
+              {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                <div key={d} className="flex-1 text-center text-[9px] text-zinc-600">
+                  {d === 1 || d % 5 === 0 ? d : ""}
+                </div>
+              ))}
             </div>
-          );
-        })()
+          </div>
+          {months.map((ym) => {
+            const days = daysInMonth(ym);
+            return (
+              <div key={ym} className="flex items-center gap-1">
+                <div className="w-14 shrink-0 text-[10px] font-semibold text-zinc-400 text-right pr-2">
+                  {monthLabel(ym)}
+                </div>
+                <div className="flex flex-1 gap-px">
+                  {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => {
+                    if (d > days) {
+                      return <div key={d} className="flex-1 aspect-square opacity-0 pointer-events-none" />;
+                    }
+                    const dateStr = `${ym}-${String(d).padStart(2, "0")}`;
+                    const count   = dateMap[dateStr] ?? 0;
+                    return (
+                      <div
+                        key={d}
+                        className={`flex-1 aspect-square rounded-sm cursor-default transition-opacity hover:opacity-75 ${heatmapColor(count)}`}
+                        onMouseEnter={(e) => {
+                          const rect = (e.target as HTMLElement).getBoundingClientRect();
+                          setHovered({ label: `${d} ${monthLabel(ym)}`, count, x: rect.left + window.scrollX, y: rect.top + window.scrollY });
+                        }}
+                        onMouseLeave={() => setHovered(null)}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       ) : (
         /* ── WEEKLY: rows = weeks, cols = Pzt..Paz ── */
         <div className="overflow-x-auto">
