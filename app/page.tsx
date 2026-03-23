@@ -846,10 +846,10 @@ function PostingHeatmapSection() {
       .catch(() => setLoading(false));
   }, []);
 
-  // Build 90-day date array (oldest → newest)
+  // Build 180-day date array (oldest → newest)
   const days90: string[] = [];
   const today = new Date();
-  for (let i = 89; i >= 0; i--) {
+  for (let i = 179; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
     days90.push(d.toISOString().slice(0, 10));
@@ -873,14 +873,14 @@ function PostingHeatmapSection() {
     weeks.push(padded.slice(i, i + 7));
   }
 
-  // Month labels: for each week col, show month name if it's a new month
-  const monthLabels: (string | null)[] = weeks.map((week) => {
+  // Month labels: first column always gets a label; subsequent columns get one at each month boundary
+  const monthLabels: (string | null)[] = weeks.map((week, wi) => {
     const first = week.find((d) => d !== null);
     if (!first) return null;
     const d   = new Date(first);
     const dow = (d.getDay() + 6) % 7;
-    // show label only on first week of a month
-    if (d.getDate() - dow <= 7) {
+    const isMonthBoundary = d.getDate() - dow <= 7;
+    if (wi === 0 || isMonthBoundary) {
       return d.toLocaleDateString("tr-TR", { month: "short" });
     }
     return null;

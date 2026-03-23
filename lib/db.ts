@@ -317,7 +317,7 @@ export async function getPostingSchedule(): Promise<{ username: string; date: st
       posted_at::date::text AS date,
       COUNT(*)::int          AS count
     FROM instagram_posts
-    WHERE posted_at >= NOW() - INTERVAL '90 days'
+    WHERE posted_at >= NOW() - INTERVAL '180 days'
     GROUP BY username, posted_at::date
     ORDER BY username, date
   `;
