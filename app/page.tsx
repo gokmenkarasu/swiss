@@ -846,10 +846,16 @@ function PostingHeatmapSection() {
       .catch(() => setLoading(false));
   }, []);
 
-  // Build 180-day date array (oldest → newest)
-  const days90: string[] = [];
+  // Determine grid range: from oldest post date (or 180d max) to today
   const today = new Date();
-  for (let i = 179; i >= 0; i--) {
+  const allDates = data.map((r) => r.date).filter(Boolean);
+  const oldestDate = allDates.length
+    ? new Date(allDates.reduce((a, b) => (a < b ? a : b)))
+    : new Date(today.getTime() - 89 * 86400000);
+  const msInDay    = 86400000;
+  const spanDays   = Math.ceil((today.getTime() - oldestDate.getTime()) / msInDay) + 1;
+  const days90: string[] = [];
+  for (let i = spanDays - 1; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
     days90.push(d.toISOString().slice(0, 10));
