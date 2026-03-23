@@ -186,7 +186,6 @@ function RadarTab() {
                 <span className="w-2 h-2 rounded-full bg-purple-400" />
                 <h3 className="font-semibold text-white/90 text-sm">Instagram Analizi</h3>
               </div>
-              <p className="text-xs text-zinc-500">Rakip hesaplarının gerçek zamanlı takipçi verisi</p>
             </div>
             <div className="flex items-center gap-2">
               <button
