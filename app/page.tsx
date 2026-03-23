@@ -822,6 +822,202 @@ function ContentIntelligenceTab() {
           })}
         </div>
       )}
+
+      {/* Posting Frequency Heatmap */}
+      <PostingHeatmapSection />
+    </div>
+  );
+}
+
+// ─── Posting Frequency Heatmap ────────────────────────────────────────────────
+
+type ScheduleRow = { username: string; date: string; count: number };
+
+function PostingHeatmapSection() {
+  const [data, setData]                   = useState<ScheduleRow[]>([]);
+  const [loading, setLoading]             = useState(true);
+  const [selected, setSelected]           = useState<string | null>(null); // null = Tümü
+  const [hovered, setHovered]             = useState<{ date: string; count: number; x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/instagram-posting-schedule")
+      .then((r) => r.json())
+      .then((j) => { setData(j.data ?? []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  // Build 90-day date array (oldest → newest)
+  const days90: string[] = [];
+  const today = new Date();
+  for (let i = 89; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    days90.push(d.toISOString().slice(0, 10));
+  }
+
+  // Build count map for selected competitor or all
+  const countMap: Record<string, number> = {};
+  for (const row of data) {
+    if (selected === null || row.username === selected) {
+      countMap[row.date] = (countMap[row.date] ?? 0) + row.count;
+    }
+  }
+
+  // Group into weeks (columns of 7)
+  // Pad so first day falls on correct weekday (Mon=0)
+  const firstDate = new Date(days90[0]);
+  const firstDow  = (firstDate.getDay() + 6) % 7; // Mon=0
+  const padded    = [...Array(firstDow).fill(null), ...days90];
+  const weeks: (string | null)[][] = [];
+  for (let i = 0; i < padded.length; i += 7) {
+    weeks.push(padded.slice(i, i + 7));
+  }
+
+  // Month labels: for each week col, show month name if it's a new month
+  const monthLabels: (string | null)[] = weeks.map((week) => {
+    const first = week.find((d) => d !== null);
+    if (!first) return null;
+    const d   = new Date(first);
+    const dow = (d.getDay() + 6) % 7;
+    // show label only on first week of a month
+    if (d.getDate() - dow <= 7) {
+      return d.toLocaleDateString("tr-TR", { month: "short" });
+    }
+    return null;
+  });
+
+  const cellColor = (count: number) => {
+    if (count === 0) return "bg-zinc-800";
+    if (count === 1) return "bg-green-900";
+    if (count === 2) return "bg-green-700";
+    if (count <= 4)  return "bg-green-600";
+    return "bg-green-500";
+  };
+
+  const DAY_LABELS = ["Pzt", "", "Çar", "", "Cum", "", ""];
+
+  const totalPosts = Object.values(countMap).reduce((a, b) => a + b, 0);
+
+  return (
+    <div className="glass rounded-2xl p-5 space-y-4" style={{ border: "1px solid rgba(255,255,255,0.07)" }}>
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h4 className="text-sm font-semibold text-white/80">Paylaşım Takvimi</h4>
+          <p className="text-xs text-zinc-500 mt-0.5">Son 90 gün · {totalPosts} post</p>
+        </div>
+      </div>
+
+      {/* Filter chips */}
+      <div className="flex flex-wrap gap-1.5">
+        <button
+          onClick={() => setSelected(null)}
+          className={`text-xs px-3 py-1 rounded-full transition-all ${
+            selected === null
+              ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+              : "text-zinc-500 border border-zinc-700 hover:text-zinc-300"
+          }`}
+        >
+          Tümü
+        </button>
+        {competitors.map((c) => (
+          <button
+            key={c.instagramHandle}
+            onClick={() => setSelected(selected === c.instagramHandle ? null : c.instagramHandle)}
+            className={`text-xs px-3 py-1 rounded-full transition-all ${
+              selected === c.instagramHandle
+                ? "bg-green-500/20 text-green-300 border border-green-500/40"
+                : "text-zinc-500 border border-zinc-700 hover:text-zinc-300"
+            }`}
+          >
+            {c.shortName}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="text-xs text-zinc-600 py-4 text-center">Yükleniyor…</div>
+      ) : data.length === 0 ? (
+        <div className="text-xs text-zinc-600 py-4 text-center">Henüz post verisi yok</div>
+      ) : (
+        <div className="relative overflow-x-auto">
+          {/* Month labels row */}
+          <div className="flex gap-1 mb-1 ml-8">
+            {weeks.map((_, wi) => (
+              <div key={wi} className="w-3 text-[9px] text-zinc-600 text-center">
+                {monthLabels[wi] ?? ""}
+              </div>
+            ))}
+          </div>
+
+          {/* Grid */}
+          <div className="flex gap-0.5">
+            {/* Day labels */}
+            <div className="flex flex-col gap-1 mr-1.5">
+              {DAY_LABELS.map((lbl, i) => (
+                <div key={i} className="h-3 w-5 text-[9px] text-zinc-600 flex items-center justify-end pr-0.5">
+                  {lbl}
+                </div>
+              ))}
+            </div>
+
+            {/* Week columns */}
+            {weeks.map((week, wi) => (
+              <div key={wi} className="flex flex-col gap-1">
+                {week.map((date, di) => {
+                  if (!date) {
+                    return <div key={di} className="w-3 h-3" />;
+                  }
+                  const count = countMap[date] ?? 0;
+                  return (
+                    <div
+                      key={di}
+                      className={`w-3 h-3 rounded-sm cursor-default transition-opacity hover:opacity-80 ${cellColor(count)}`}
+                      onMouseEnter={(e) => {
+                        const rect = (e.target as HTMLElement).getBoundingClientRect();
+                        setHovered({ date, count, x: rect.left + window.scrollX, y: rect.top + window.scrollY });
+                      }}
+                      onMouseLeave={() => setHovered(null)}
+                    />
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+
+          {/* Legend */}
+          <div className="flex items-center gap-1.5 mt-3 justify-end">
+            <span className="text-[9px] text-zinc-600">Az</span>
+            {["bg-zinc-800", "bg-green-900", "bg-green-700", "bg-green-600", "bg-green-500"].map((cls) => (
+              <div key={cls} className={`w-3 h-3 rounded-sm ${cls}`} />
+            ))}
+            <span className="text-[9px] text-zinc-600">Çok</span>
+          </div>
+        </div>
+      )}
+
+      {/* Tooltip */}
+      {hovered && (
+        <div
+          className="fixed z-50 pointer-events-none px-2.5 py-1.5 rounded-lg text-xs text-white shadow-xl"
+          style={{
+            left: hovered.x + 8,
+            top: hovered.y - 36,
+            background: "rgba(20,20,28,0.95)",
+            border: "1px solid rgba(255,255,255,0.12)",
+          }}
+        >
+          <span className="text-zinc-300">
+            {new Date(hovered.date + "T00:00:00").toLocaleDateString("tr-TR", { day: "numeric", month: "short" })}
+          </span>
+          {" · "}
+          <span className={hovered.count > 0 ? "text-green-400 font-semibold" : "text-zinc-500"}>
+            {hovered.count > 0
+              ? `${hovered.count} post`
+              : "post yok"}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
