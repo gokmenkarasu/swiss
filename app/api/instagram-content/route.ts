@@ -246,19 +246,31 @@ export async function POST(req: NextRequest) {
 
     const posts = await scrapeUserPosts(username);
 
-    // Store each post individually
+    // Store each post individually — skip garbage rows (no real post_id + no engagement)
+    let saved = 0;
     for (const p of posts) {
-      const postId = resolvePostId(p);
+      const postId   = resolvePostId(p);
       const postedAt = resolvePostedAt(p);
+      const type     = resolveType(p);
+      const likes    = resolveLikes(p);
+      const comments = resolveComments(p);
+      const views    = resolveViews(p);
+
+      // Skip if Apify returned a placeholder (no real id, unknown type, zero engagement)
+      const hasRealId = p.id || p.shortCode;
+      const hasEngagement = likes > 0 || comments > 0 || views > 0;
+      if (!hasRealId && type === "Unknown" && !hasEngagement) continue;
+
       await upsertPost({
         username,
         post_id:        postId,
-        post_type:      resolveType(p),
-        likes_count:    resolveLikes(p),
-        comments_count: resolveComments(p),
-        views_count:    resolveViews(p),
+        post_type:      type,
+        likes_count:    likes,
+        comments_count: comments,
+        views_count:    views,
         posted_at:      postedAt ?? new Date().toISOString(),
       });
+      saved++;
     }
 
     // Also upsert aggregate snapshot (for fallback / content_stats table)
@@ -267,7 +279,7 @@ export async function POST(req: NextRequest) {
 
     await upsertContentStat({
       username,
-      posts_scraped:   posts.length,
+      posts_scraped:   saved,
       photo_count:     photos,
       video_count:     videos,
       carousel_count:  carousels,
@@ -281,7 +293,7 @@ export async function POST(req: NextRequest) {
       ok: true,
       source: "apify",
       username,
-      posts_scraped:   posts.length,
+      posts_scraped:   saved,
       photo_count:     photos,
       video_count:     videos,
       carousel_count:  carousels,
