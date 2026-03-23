@@ -212,8 +212,33 @@ export async function getPostStatsByRange(from: string, to: string): Promise<Pos
 }
 
 export async function getScrapedUsernames(): Promise<string[]> {
-  const rows = await sql`SELECT DISTINCT username FROM instagram_posts`;
+  // Returns usernames that have real posts OR have been attempted (even if 0 posts)
+  const rows = await sql`
+    SELECT username FROM instagram_posts
+    UNION
+    SELECT username FROM instagram_fetch_log
+  `;
   return rows.map((r) => r.username as string);
+}
+
+export async function initFetchLogTable() {
+  await sql`
+    CREATE TABLE IF NOT EXISTS instagram_fetch_log (
+      username   VARCHAR(100) PRIMARY KEY,
+      last_attempt TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      posts_saved  INTEGER NOT NULL DEFAULT 0
+    )
+  `;
+}
+
+export async function logFetchAttempt(username: string, postsSaved: number) {
+  await sql`
+    INSERT INTO instagram_fetch_log (username, last_attempt, posts_saved)
+    VALUES (${username}, NOW(), ${postsSaved})
+    ON CONFLICT (username) DO UPDATE SET
+      last_attempt = NOW(),
+      posts_saved  = EXCLUDED.posts_saved
+  `;
 }
 
 export async function getLatestFetchDate(username: string): Promise<string | null> {

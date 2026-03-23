@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   initContentStatsTable,
   initPostsTable,
+  initFetchLogTable,
   upsertContentStat,
   upsertPost,
   getLatestContentStats,
@@ -9,6 +10,7 @@ import {
   getPostStatsByRange,
   getLatestFetchDate,
   getScrapedUsernames,
+  logFetchAttempt,
 } from "@/lib/db";
 
 const APIFY_TOKEN = process.env.APIFY_API_TOKEN;
@@ -173,7 +175,7 @@ function calcStats(posts: ApifyPost[], followers: number) {
 // GET — returns post stats from DB, filtered by ?days= (default 30)
 export async function GET(req: NextRequest) {
   try {
-    await Promise.all([initContentStatsTable(), initPostsTable()]);
+    await Promise.all([initContentStatsTable(), initPostsTable(), initFetchLogTable()]);
 
     const url  = new URL(req.url);
     const from = url.searchParams.get("from");
@@ -185,8 +187,18 @@ export async function GET(req: NextRequest) {
       ? await getPostStatsByRange(from, to)
       : await getPostStats(days);
 
-    // Always include which usernames have ever been scraped
-    const scrapedUsernames = await getScrapedUsernames();
+    // Always include which usernames have ever been attempted
+    const [scrapedUsernames, fetchLog] = await Promise.all([
+      getScrapedUsernames(),
+      (async () => {
+        await initFetchLogTable();
+        const rows = await (await import("@/lib/db")).default`
+          SELECT username, posts_saved FROM instagram_fetch_log
+        `;
+        return rows as { username: string; posts_saved: number }[];
+      })(),
+    ]);
+    const failedUsernames = fetchLog.filter((r) => r.posts_saved === 0).map((r) => r.username);
 
     if (postStats.length > 0) {
       const withFetch = await Promise.all(
@@ -195,12 +207,12 @@ export async function GET(req: NextRequest) {
           last_fetch: await getLatestFetchDate(s.username),
         }))
       );
-      return NextResponse.json({ stats: withFetch, scraped: scrapedUsernames, source: "posts", days, from, to });
+      return NextResponse.json({ stats: withFetch, scraped: scrapedUsernames, failed: failedUsernames, source: "posts", days, from, to });
     }
 
     // Fallback: aggregate content stats (no date filter)
     const stats = await getLatestContentStats();
-    return NextResponse.json({ stats, scraped: scrapedUsernames, source: "content_stats", days });
+    return NextResponse.json({ stats, scraped: scrapedUsernames, failed: failedUsernames, source: "content_stats", days });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
@@ -211,7 +223,7 @@ export async function GET(req: NextRequest) {
 //   { mode: "manual", username, ...fields } → manual upsert to content_stats only
 export async function POST(req: NextRequest) {
   try {
-    await Promise.all([initContentStatsTable(), initPostsTable()]);
+    await Promise.all([initContentStatsTable(), initPostsTable(), initFetchLogTable()]);
     const body = await req.json();
 
     if (body.mode === "manual") {
@@ -277,6 +289,7 @@ export async function POST(req: NextRequest) {
     const { photos, videos, carousels, avgLikes, avgComments, avgViews, engagementRate } =
       calcStats(posts, followers);
 
+    await logFetchAttempt(username, saved);
     await upsertContentStat({
       username,
       posts_scraped:   saved,

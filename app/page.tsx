@@ -388,6 +388,7 @@ function ContentIntelligenceTab() {
       const snapData    = await snapRes.json().catch(() => ({}));
       setStats(contentData.stats ?? []);
       setScrapedSet(new Set(contentData.scraped ?? []));
+      setFailedSet(new Set(contentData.failed ?? []));
       setLatestSnaps(snapData.latest ?? []);
     } catch (e) {
       setLoadError(String(e));
