@@ -532,6 +532,9 @@ function InstagramHistoryTab() {
     return Array.from(byDate.values()).sort((a, b) => String(a.date).localeCompare(String(b.date)));
   })();
 
+  const allHandles = [...new Set(history.map((s) => s.username))];
+  const handles = allHandles.filter((h) => activeHandles.has(h));
+
   // Normalized chart data: first appearance of each handle = 100 (base)
   const baseValues: Record<string, number> = {};
   chartData.forEach((row) => {
@@ -551,9 +554,6 @@ function InstagramHistoryTab() {
     });
     return out;
   });
-
-  const allHandles = [...new Set(history.map((s) => s.username))];
-  const handles = allHandles.filter((h) => activeHandles.has(h));
 
   // Ranked latest
   const ranked = [...latest].sort((a, b) => b.followers - a.followers);
