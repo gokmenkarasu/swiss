@@ -61,7 +61,8 @@ function resolveType(p: ApifyPost): "Image" | "Video" | "Sidecar" | "Unknown" {
 }
 
 function resolveLikes(p: ApifyPost): number {
-  return Number(p.likesCount ?? p.diggCount ?? p.likes ?? p.likeCount ?? 0);
+  const v = Number(p.likesCount ?? p.diggCount ?? p.likes ?? p.likeCount ?? 0);
+  return v < 0 ? 0 : v; // -1 means Instagram hid the count
 }
 
 function resolveComments(p: ApifyPost): number {
