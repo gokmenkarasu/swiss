@@ -17,6 +17,7 @@ export type Competitor = {
   name: string;
   shortName: string;
   instagramHandle: string;
+  isSelf?: boolean; // true = kendi markamız
   activeAds: CompetitorAd[];
   topKeywords: string[];
   instagramEngagement: number;
@@ -151,6 +152,17 @@ export const gaps: GapOpportunity[] = [
 // ─── COMPETITORS ────────────────────────────────────────────────────────────
 
 export const competitors: Competitor[] = [
+  {
+    name: "Swissotel The Bosphorus",
+    shortName: "Swissotel",
+    instagramHandle: "swissotelthebosphorus",
+    isSelf: true,
+    activeAds: [],
+    topKeywords: [],
+    instagramEngagement: 0,
+    adSpendEstimate: "—",
+    weakness: "—",
+  },
   {
     name: "Conrad İstanbul Bosphorus",
     shortName: "Conrad",

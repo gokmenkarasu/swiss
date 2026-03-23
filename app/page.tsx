@@ -465,6 +465,7 @@ function DemandTab() {
 
 // ── colour palette per competitor ──────────────────────────────────────────
 const HANDLE_COLOR: Record<string, string> = {
+  swissotelthebosphorus:    "#c9a84c", // gold — kendi markamız
   fsbosphorus:              "#f59e0b",
   conradistanbulbosphorus:  "#3b82f6",
   grandhyattistanbul:       "#22c55e",
@@ -484,6 +485,16 @@ function InstagramHistoryTab() {
   const [latest, setLatest] = useState<Snapshot[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeHandles, setActiveHandles] = useState<Set<string>>(
+    () => new Set(competitors.map((c) => c.instagramHandle))
+  );
+
+  const toggleHandle = (h: string) =>
+    setActiveHandles((prev) => {
+      const next = new Set(prev);
+      next.has(h) ? next.delete(h) : next.add(h);
+      return next;
+    });
 
   // Backfill form state
   const [showBackfill, setShowBackfill] = useState(false);
@@ -521,7 +532,8 @@ function InstagramHistoryTab() {
     return Array.from(byDate.values()).sort((a, b) => String(a.date).localeCompare(String(b.date)));
   })();
 
-  const handles = [...new Set(history.map((s) => s.username))];
+  const allHandles = [...new Set(history.map((s) => s.username))];
+  const handles = allHandles.filter((h) => activeHandles.has(h));
 
   // Ranked latest
   const ranked = [...latest].sort((a, b) => b.followers - a.followers);
@@ -583,6 +595,31 @@ function InstagramHistoryTab() {
             Geçmiş Ekle
           </button>
         </div>
+      </div>
+
+      {/* Account filter pills */}
+      <div className="flex flex-wrap gap-2">
+        {competitors.map((c) => {
+          const active = activeHandles.has(c.instagramHandle);
+          const color = HANDLE_COLOR[c.instagramHandle] ?? "#6b7280";
+          return (
+            <button
+              key={c.instagramHandle}
+              onClick={() => toggleHandle(c.instagramHandle)}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full transition-all duration-150"
+              style={{
+                background: active ? color + "22" : "rgba(255,255,255,0.04)",
+                color: active ? color : "#71717a",
+                border: `1px solid ${active ? color + "55" : "rgba(255,255,255,0.08)"}`,
+                fontWeight: active ? 600 : 400,
+              }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: active ? color : "#3f3f46" }} />
+              {c.shortName}
+              {c.isSelf && <span className="text-[10px] opacity-60 ml-0.5">sen</span>}
+            </button>
+          );
+        })}
       </div>
 
       {/* Backfill form */}
@@ -695,19 +732,22 @@ function InstagramHistoryTab() {
               <p className="text-xs text-zinc-500 uppercase tracking-wider">Son Snapshot — Takipçi Sıralaması</p>
             </div>
             <div className="divide-y" style={{ borderColor: "rgba(255,255,255,0.05)" }}>
-              {ranked.map((s, i) => {
+              {ranked.filter((s) => activeHandles.has(s.username)).map((s, i) => {
                 const prev = history
                   .filter((h) => h.username === s.username)
                   .sort((a, b) => String(a.snap_date).localeCompare(String(b.snap_date)));
                 const prevFollowers = prev.length >= 2 ? prev[prev.length - 2].followers : null;
                 const diff = prevFollowers !== null ? s.followers - prevFollowers : null;
                 const color = HANDLE_COLOR[s.username] ?? "#6b7280";
+                const isSelf = competitors.find((c) => c.instagramHandle === s.username)?.isSelf;
                 return (
-                  <div key={s.username} className="flex items-center gap-4 px-4 py-3">
+                  <div key={s.username} className="flex items-center gap-4 px-4 py-3"
+                    style={isSelf ? { background: "rgba(201,168,76,0.06)" } : {}}>
                     <span className="text-xs font-bold w-5 text-zinc-600">#{i + 1}</span>
                     <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: color }} />
                     <div className="flex-1 min-w-0">
                       <span className="text-sm font-medium text-white/80">{shortLabel(s.username)}</span>
+                      {isSelf && <span className="text-[10px] ml-1.5 px-1.5 py-0.5 rounded-full font-semibold" style={{ background: "rgba(201,168,76,0.2)", color: "#c9a84c" }}>biz</span>}
                       <span className="text-xs text-zinc-600 ml-2">@{s.username}</span>
                     </div>
                     <div className="text-right">
