@@ -706,7 +706,7 @@ function ContentIntelligenceTab() {
                       )}
                       {lastFetch && (
                         <span className="text-[10px] text-zinc-700 ml-auto">
-                          son çekim: {formatDate(lastFetch)}
+                          son güncelleme: {formatDate(lastFetch)}
                         </span>
                       )}
                     </div>
