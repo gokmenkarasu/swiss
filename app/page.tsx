@@ -831,11 +831,11 @@ function ContentIntelligenceTab() {
 
 // ─── Posting Frequency Heatmap ────────────────────────────────────────────────
 
-type ScheduleRow = { username: string; month: string; dow: number; count: number };
+type ScheduleRow = { username: string; date: string; count: number };
 
-const DOW_LABELS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"]; // dow 1–7
+const DOW_LABELS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"]; // index 0–6, ISODOW 1–7
 
-function cellColor(count: number) {
+function heatmapColor(count: number) {
   if (count === 0)  return "bg-zinc-800";
   if (count <= 2)   return "bg-green-300";
   if (count <= 5)   return "bg-green-500";
@@ -843,13 +843,35 @@ function cellColor(count: number) {
   return "bg-green-900";
 }
 
+// Returns ISO week key "YYYY-Www" for a date string
+function isoWeekKey(dateStr: string): string {
+  const d = new Date(dateStr + "T00:00:00");
+  // Set to nearest Thursday (ISO week rule)
+  const thu = new Date(d);
+  thu.setDate(d.getDate() - ((d.getDay() + 6) % 7) + 3);
+  const year = thu.getFullYear();
+  const week1 = new Date(year, 0, 4); // Jan 4 is always in week 1
+  const weekNum = Math.round(((thu.getTime() - week1.getTime()) / 86400000 + ((week1.getDay() + 6) % 7)) / 7) + 1;
+  return `${year}-W${String(weekNum).padStart(2, "0")}`;
+}
+
+// Returns Monday of the ISO week as a display label
+function weekStartLabel(weekKey: string): string {
+  const [year, wStr] = weekKey.split("-W");
+  const jan4 = new Date(Number(year), 0, 4);
+  const week1Mon = new Date(jan4);
+  week1Mon.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7));
+  const mon = new Date(week1Mon);
+  mon.setDate(week1Mon.getDate() + (Number(wStr) - 1) * 7);
+  return mon.toLocaleDateString("tr-TR", { day: "numeric", month: "short" });
+}
+
 function PostingHeatmapSection() {
-  const [data, setData]       = useState<ScheduleRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [hovered, setHovered]   = useState<{
-    label: string; count: number; x: number; y: number;
-  } | null>(null);
+  const [data, setData]           = useState<ScheduleRow[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [selected, setSelected]   = useState<string | null>(null);
+  const [view, setView]           = useState<"monthly" | "weekly">("monthly");
+  const [hovered, setHovered]     = useState<{ label: string; count: number; x: number; y: number } | null>(null);
 
   useEffect(() => {
     fetch("/api/instagram-posting-schedule")
@@ -858,31 +880,53 @@ function PostingHeatmapSection() {
       .catch(() => setLoading(false));
   }, []);
 
-  // Aggregate: countMap[month][dow] = total posts
-  const countMap: Record<string, Record<number, number>> = {};
+  // Build aggregated map: rowKey → { [dow 1..7]: count }
+  const rowMap: Record<string, Record<number, number>> = {};
   for (const row of data) {
     if (selected !== null && row.username !== selected) continue;
-    if (!countMap[row.month]) countMap[row.month] = {};
-    countMap[row.month][row.dow] = (countMap[row.month][row.dow] ?? 0) + row.count;
+    const d   = new Date(row.date + "T00:00:00");
+    const dow = d.getDay() === 0 ? 7 : d.getDay(); // 1=Mon … 7=Sun
+    const key = view === "monthly"
+      ? row.date.slice(0, 7)          // "YYYY-MM"
+      : isoWeekKey(row.date);         // "YYYY-Www"
+    if (!rowMap[key]) rowMap[key] = {};
+    rowMap[key][dow] = (rowMap[key][dow] ?? 0) + row.count;
   }
 
-  // Sorted month list
-  const months = Object.keys(countMap).sort();
+  const rows = Object.keys(rowMap).sort();
+  const totalPosts = Object.values(rowMap).flatMap((m) => Object.values(m)).reduce((a, b) => a + b, 0);
 
-  const totalPosts = Object.values(countMap).flatMap((m) => Object.values(m)).reduce((a, b) => a + b, 0);
-
-  const monthLabel = (ym: string) => {
-    const [y, m] = ym.split("-");
-    return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString("tr-TR", { month: "short", year: "2-digit" });
+  const rowLabel = (key: string) => {
+    if (view === "monthly") {
+      const [y, m] = key.split("-");
+      return new Date(Number(y), Number(m) - 1, 1)
+        .toLocaleDateString("tr-TR", { month: "short", year: "2-digit" });
+    }
+    return weekStartLabel(key);
   };
 
   return (
     <div className="glass rounded-2xl p-5 space-y-4" style={{ border: "1px solid rgba(255,255,255,0.07)" }}>
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h4 className="text-sm font-semibold text-white/80">Paylaşım Takvimi</h4>
           <p className="text-xs text-zinc-500 mt-0.5">{totalPosts} post · son 6 ay</p>
+        </div>
+        {/* View toggle */}
+        <div className="flex rounded-xl overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
+          {(["monthly", "weekly"] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`text-xs px-3 py-1.5 transition-all ${
+                view === v ? "text-amber-300 font-semibold" : "text-zinc-500 hover:text-zinc-300"
+              }`}
+              style={view === v ? { background: "rgba(201,168,76,0.18)" } : {}}
+            >
+              {v === "monthly" ? "Aylık" : "Haftalık"}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -915,15 +959,14 @@ function PostingHeatmapSection() {
 
       {loading ? (
         <div className="text-xs text-zinc-600 py-4 text-center">Yükleniyor…</div>
-      ) : months.length === 0 ? (
+      ) : rows.length === 0 ? (
         <div className="text-xs text-zinc-600 py-4 text-center">Henüz post verisi yok</div>
       ) : (
         <div className="overflow-x-auto">
           <table className="border-separate border-spacing-1">
             <thead>
               <tr>
-                {/* month label column */}
-                <th className="w-14" />
+                <th className="w-16" />
                 {DOW_LABELS.map((d) => (
                   <th key={d} className="w-8 text-[10px] font-medium text-zinc-500 text-center pb-1">
                     {d}
@@ -932,21 +975,21 @@ function PostingHeatmapSection() {
               </tr>
             </thead>
             <tbody>
-              {months.map((mo) => (
-                <tr key={mo}>
+              {rows.map((key) => (
+                <tr key={key}>
                   <td className="text-[10px] font-semibold text-zinc-400 pr-2 text-right whitespace-nowrap">
-                    {monthLabel(mo)}
+                    {rowLabel(key)}
                   </td>
                   {[1, 2, 3, 4, 5, 6, 7].map((dow) => {
-                    const count = countMap[mo]?.[dow] ?? 0;
+                    const count = rowMap[key]?.[dow] ?? 0;
                     return (
                       <td key={dow} className="p-0">
                         <div
-                          className={`w-8 h-8 rounded-lg cursor-default transition-opacity hover:opacity-75 ${cellColor(count)}`}
+                          className={`w-8 h-8 rounded-lg cursor-default transition-opacity hover:opacity-75 ${heatmapColor(count)}`}
                           onMouseEnter={(e) => {
                             const rect = (e.target as HTMLElement).getBoundingClientRect();
                             setHovered({
-                              label: `${monthLabel(mo)} ${DOW_LABELS[dow - 1]}`,
+                              label: `${rowLabel(key)} · ${DOW_LABELS[dow - 1]}`,
                               count,
                               x: rect.left + window.scrollX,
                               y: rect.top + window.scrollY,
