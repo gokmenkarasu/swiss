@@ -778,10 +778,8 @@ function ContentIntelligenceTab() {
                         </div>
                       </>
                     ) : failedSet.has(c.instagramHandle) ? (
-                      /* Fetch attempted but Apify returned 0 real posts */
-                      <p className="text-xs text-zinc-600 py-3">
-                        Veri çekilemedi — hesap Apify tarafından okunamıyor
-                      </p>
+                      /* Fetch attempted but account is private / no content */
+                      <p className="text-xs text-zinc-600 py-3">İçerik yok</p>
                     ) : scrapedSet.has(c.instagramHandle) ? (
                       /* Scraped but no posts in selected date range */
                       <p className="text-xs text-zinc-600 py-3">Bu dönemde post yok</p>
