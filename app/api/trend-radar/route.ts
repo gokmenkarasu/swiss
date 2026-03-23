@@ -9,7 +9,7 @@ import {
 const AUTH = process.env.DATAFORSEO_AUTH!;
 const BASE = "https://api.dataforseo.com/v3";
 
-const ALERT_THRESHOLD = 30; // trendPct >= 30 → alert
+const ALERT_THRESHOLD = 50; // trendPct >= 50 → alert (meaningful spike only)
 
 const TRACKED: { keyword: string; geo: string; label: string; locationName?: string }[] = [
   { keyword: "istanbul luxury hotel", geo: "TR", label: "Istanbul Luxury Hotel" }, // geo filter not supported for TR
@@ -20,20 +20,23 @@ const TRACKED: { keyword: string; geo: string; label: string; locationName?: str
 
 function calcTrend(data: { values: (number | null)[] }[]): { trendPct: number; sparkline: number[] } {
   const vals = data.map((pt) => pt.values[0] ?? 0);
-  const nonNull = vals.filter((v) => v > 0);
-  if (nonNull.length < 2) {
-    return { trendPct: nonNull[0] === 100 ? 99 : 0, sparkline: vals };
-  }
-  const mid = Math.floor(vals.length / 2);
-  const oldAvg = vals.slice(0, mid).reduce((s, v) => s + v, 0) / mid;
-  const newAvg = vals.slice(mid).reduce((s, v) => s + v, 0) / (vals.length - mid);
+
+  // past_90_days gives ~13 weekly points. Compare last 4 weeks vs first 9 weeks.
+  // This gives a stable month-over-month signal instead of noise from a single spike.
+  if (vals.length < 4) return { trendPct: 0, sparkline: vals };
+
+  const splitAt = Math.max(vals.length - 4, 1); // last 4 points = "recent month"
+  const oldSlice = vals.slice(0, splitAt);
+  const newSlice = vals.slice(splitAt);
+
+  const oldAvg = oldSlice.reduce((s, v) => s + v, 0) / oldSlice.length;
+  const newAvg = newSlice.reduce((s, v) => s + v, 0) / newSlice.length;
 
   let trendPct: number;
-  if (oldAvg === 0 && newAvg === 0) {
-    trendPct = 0;
-  } else if (oldAvg === 0) {
-    // Sıfırdan yükselen ilgi — newAvg'ı baz alarak oran üret (max 99)
-    trendPct = Math.min(Math.round(newAvg * 3), 99);
+  if (oldAvg < 1 && newAvg < 1) {
+    trendPct = 0; // both periods flat — no trend
+  } else if (oldAvg < 1) {
+    trendPct = 0; // no stable baseline to compare against — don't alarm
   } else {
     trendPct = Math.round(((newAvg - oldAvg) / oldAvg) * 100);
   }
@@ -74,7 +77,7 @@ export async function POST(req: Request) {
           {
             keywords: [item.keyword],
             ...(item.locationName ? { location_name: item.locationName } : {}),
-            time_range: "past_7_days",
+            time_range: "past_90_days",
             type: "web",
           },
         ]),
