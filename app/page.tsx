@@ -31,12 +31,12 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: string |
 }
 import { gaps, competitors, venueScores, demandSignals } from "@/lib/data";
 import type { GapOpportunity } from "@/lib/data";
-import type { Snapshot, ContentStat, PostStats } from "@/lib/db";
+import type { Snapshot, ContentStat, PostStats, TrackedTrend } from "@/lib/db";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 
-type Tab = "gaps" | "radar" | "instagram" | "content" | "venues" | "demand" | "reviews" | "tripadvisor";
+type Tab = "gaps" | "radar" | "instagram" | "content" | "venues" | "demand" | "reviews" | "tripadvisor" | "trends";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "gaps", label: "Fırsat Boşlukları" },
@@ -47,6 +47,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "demand", label: "İstanbul Sinyalleri" },
   { id: "reviews", label: "⭐ Google İtibar" },
   { id: "tripadvisor", label: "🦉 TripAdvisor" },
+  { id: "trends", label: "🌐 Trend Radar" },
 ];
 
 const urgencyConfig = {
@@ -142,6 +143,188 @@ function GapCard({ gap, trends, trendsLoading }: { gap: GapOpportunity; trends: 
   );
 }
 
+
+// ─── TREND RADAR ──────────────────────────────────────────────────────────────
+
+const GEO_META: Record<string, { flag: string; name: string }> = {
+  TR: { flag: "🇹🇷", name: "Türkiye" },
+  DE: { flag: "🇩🇪", name: "Almanya" },
+  GB: { flag: "🇬🇧", name: "İngiltere" },
+  US: { flag: "🇺🇸", name: "ABD" },
+};
+
+function MiniSparkline({ values }: { values: number[] }) {
+  if (!values || values.length < 2) return null;
+  const max = Math.max(...values, 1);
+  const w = 80;
+  const h = 28;
+  const pts = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * w;
+    const y = h - (v / max) * h;
+    return `${x},${y}`;
+  });
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
+      <polyline
+        points={pts.join(" ")}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function TrendRadarTab() {
+  const [trends, setTrends] = useState<TrackedTrend[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedGeo, setSelectedGeo] = useState<"ALL" | "TR" | "DE" | "GB" | "US">("ALL");
+  const [lastError, setLastError] = useState<string | null>(null);
+
+  const loadData = useCallback(() => {
+    fetch("/api/trend-radar")
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((d: { trends: TrackedTrend[] }) => setTrends(d.trends ?? []))
+      .catch(() => setLastError("Veri yüklenemedi"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    setLastError(null);
+    try {
+      const r = await fetch("/api/trend-radar?action=refresh", { method: "POST" });
+      const d = await r.json();
+      setTrends(d.trends ?? []);
+    } catch {
+      setLastError("Yenileme başarısız");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const visible = selectedGeo === "ALL" ? trends : trends.filter((t) => t.geo === selectedGeo);
+
+  return (
+    <div className="space-y-5">
+      {/* Header row */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <p className="text-xs text-zinc-500 uppercase tracking-wider mb-0.5">Google Trends · 90 günlük pencere</p>
+          <p className="text-sm text-zinc-300 font-medium">Hedef pazar arama trendi takibi</p>
+        </div>
+        <button
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="flex items-center gap-2 text-xs px-4 py-2 rounded-xl glass glass-hover text-zinc-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+        >
+          <svg className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          {refreshing ? "Çekiliyor…" : "DataForSEO'dan Yenile"}
+        </button>
+      </div>
+
+      {lastError && (
+        <div className="glass rounded-xl p-3 border border-red-500/20 text-red-400 text-xs">{lastError}</div>
+      )}
+
+      {/* Geo filter chips */}
+      <div className="flex gap-2 flex-wrap">
+        {(["ALL", "TR", "DE", "GB", "US"] as const).map((g) => (
+          <button
+            key={g}
+            onClick={() => setSelectedGeo(g)}
+            className={`text-xs px-3 py-1.5 rounded-lg transition-all ${
+              selectedGeo === g
+                ? "text-black font-semibold"
+                : "glass glass-hover text-zinc-400"
+            }`}
+            style={selectedGeo === g ? { background: "linear-gradient(135deg, #c9a84c, #e8c660)" } : {}}
+          >
+            {g === "ALL" ? "🌍 Tümü" : `${GEO_META[g].flag} ${GEO_META[g].name}`}
+          </button>
+        ))}
+      </div>
+
+      {/* Cards */}
+      {loading ? (
+        <div className="text-center py-12 text-zinc-500 text-sm animate-pulse">Yükleniyor…</div>
+      ) : visible.length === 0 ? (
+        <div className="glass rounded-2xl p-10 text-center space-y-3">
+          <p className="text-zinc-400 text-sm">Henüz veri yok.</p>
+          <p className="text-zinc-600 text-xs">Yukarıdaki "Yenile" butonuna bas — DataForSEO&apos;dan canlı veri çekilecek.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {visible.map((t) => {
+            const isAlert = t.trend_pct >= 30;
+            const isUp    = t.trend_pct > 0;
+            const badgeCls = isAlert
+              ? "bg-orange-500/20 text-orange-300 border border-orange-500/30"
+              : isUp
+              ? "bg-green-500/20 text-green-300 border border-green-500/30"
+              : t.trend_pct < 0
+              ? "bg-red-500/20 text-red-300 border border-red-500/30"
+              : "bg-zinc-700/30 text-zinc-400 border border-zinc-600/30";
+            const sparkColor = isAlert ? "#f97316" : isUp ? "#4ade80" : t.trend_pct < 0 ? "#f87171" : "#52525b";
+
+            return (
+              <div
+                key={`${t.keyword}-${t.geo}`}
+                className={`glass rounded-2xl p-5 transition-all ${isAlert ? "border border-orange-500/25" : "border border-white/5"}`}
+              >
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-base">{GEO_META[t.geo]?.flag}</span>
+                      <span className="text-xs text-zinc-400 font-medium">{GEO_META[t.geo]?.name}</span>
+                      {isAlert && <span className="text-xs px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 font-bold">⚡ ALARM</span>}
+                    </div>
+                    <p className="text-sm font-semibold text-white/90">{t.label}</p>
+                    <p className="text-[11px] text-zinc-500 mt-0.5">&ldquo;{t.keyword}&rdquo;</p>
+                  </div>
+                  <span className={`text-xs font-bold px-2.5 py-1 rounded-lg flex-shrink-0 ${badgeCls}`}>
+                    {t.trend_pct > 0 ? "+" : ""}{t.trend_pct}%
+                  </span>
+                </div>
+
+                {/* Sparkline */}
+                {t.sparkline && t.sparkline.length > 1 && (
+                  <div className="mt-2" style={{ color: sparkColor }}>
+                    <MiniSparkline values={t.sparkline} />
+                  </div>
+                )}
+
+                <p className="text-[10px] text-zinc-600 mt-3">
+                  Son güncelleme: {new Date(t.fetched_at).toLocaleString("tr-TR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Info footer */}
+      <div className="glass rounded-xl p-4 border border-white/5">
+        <p className="text-xs text-zinc-500 leading-relaxed">
+          <span className="text-zinc-400 font-medium">Nasıl hesaplanır:</span>{" "}
+          Son 90 günlük arama hacmi ikiye bölünür; yeni yarı / eski yarı karşılaştırması yapılır.
+          +30% ve üzeri artış{" "}
+          <span className="text-orange-400">⚡ ALARM</span> tetikler.
+          Veri kaynağı: DataForSEO Google Trends API · 24 saat önbellekleme.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── GAPS TAB ─────────────────────────────────────────────────────────────────
 
 function GapsTab() {
   const criticalCount = gaps.filter((g) => g.urgency === "critical").length;
@@ -1798,10 +1981,19 @@ function InstagramHistoryTab() {
 
 export default function Page() {
   const [tab, setTab] = useState<Tab>("gaps");
+  const [trendAlerts, setTrendAlerts] = useState<TrackedTrend[]>([]);
+  const [alertsDismissed, setAlertsDismissed] = useState(false);
 
   const now = new Date();
   const dateStr = now.toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric" });
   const criticalCount = gaps.filter((g) => g.urgency === "critical").length;
+
+  useEffect(() => {
+    fetch("/api/trend-radar")
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((d: { alerts: TrackedTrend[] }) => setTrendAlerts(d.alerts ?? []))
+      .catch(() => {/* silent */});
+  }, []);
 
   return (
     <div className="min-h-screen" style={{ background: "radial-gradient(ellipse at top, #0f0f1a 0%, #08080f 60%)" }}>
@@ -1868,6 +2060,27 @@ export default function Page() {
           ))}
         </div>
 
+        {/* Trend Alert Banner */}
+        {!alertsDismissed && trendAlerts.length > 0 && (
+          <div className="glass rounded-xl p-4 mb-5 flex items-start gap-3 border border-orange-500/30"
+            style={{ background: "rgba(120,53,15,0.3)" }}>
+            <span className="text-orange-400 text-lg flex-shrink-0">⚡</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-orange-300 font-semibold text-sm">Trend Alarmı — {trendAlerts.length} keyword yükselişte</p>
+              <p className="text-orange-200/60 text-xs mt-0.5 truncate">
+                {trendAlerts.map((a) => `${a.label} (${a.geo}): +${a.trend_pct}%`).join(" · ")}
+              </p>
+            </div>
+            <button
+              onClick={() => setAlertsDismissed(true)}
+              className="flex-shrink-0 text-orange-400/50 hover:text-orange-300 transition-colors text-lg leading-none"
+              aria-label="Kapat"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Tabs */}
         <div className="flex gap-1 p-1 rounded-xl mb-6"
           style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
@@ -1898,6 +2111,7 @@ export default function Page() {
         {tab === "demand"    && <DemandTab />}
         {tab === "reviews"      && <ReviewsTab />}
         {tab === "tripadvisor"  && <TripAdvisorTab />}
+        {tab === "trends"       && <TrendRadarTab />}
       </div>
 
       {/* Footer */}

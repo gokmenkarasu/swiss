@@ -351,6 +351,59 @@ export async function getTrends(): Promise<{ keyword: string; trend_pct: number;
   return rows as { keyword: string; trend_pct: number; sparkline: number[]; fetched_at: string }[];
 }
 
+// ─── TREND TRACKER ───────────────────────────────────────────────────────────
+
+export async function initTrendTrackerTable() {
+  await sql`
+    CREATE TABLE IF NOT EXISTS trend_tracker (
+      keyword    TEXT NOT NULL,
+      geo        TEXT NOT NULL,
+      label      TEXT,
+      trend_pct  INTEGER NOT NULL DEFAULT 0,
+      sparkline  JSONB,
+      fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (keyword, geo)
+    )
+  `;
+}
+
+export interface TrackedTrend {
+  keyword: string;
+  geo: string;
+  label: string;
+  trend_pct: number;
+  sparkline: number[];
+  fetched_at: string;
+}
+
+export async function upsertTrackedTrend(
+  keyword: string,
+  geo: string,
+  label: string,
+  trendPct: number,
+  sparkline: number[]
+) {
+  await sql`
+    INSERT INTO trend_tracker (keyword, geo, label, trend_pct, sparkline)
+    VALUES (${keyword}, ${geo}, ${label}, ${trendPct}, ${JSON.stringify(sparkline)})
+    ON CONFLICT (keyword, geo)
+    DO UPDATE SET
+      label      = EXCLUDED.label,
+      trend_pct  = EXCLUDED.trend_pct,
+      sparkline  = EXCLUDED.sparkline,
+      fetched_at = NOW()
+  `;
+}
+
+export async function getTrackedTrends(): Promise<TrackedTrend[]> {
+  const rows = await sql`
+    SELECT keyword, geo, label, trend_pct, sparkline, fetched_at::text
+    FROM trend_tracker
+    ORDER BY geo, keyword
+  `;
+  return rows as TrackedTrend[];
+}
+
 // ─── COMPETITOR REVIEWS ─────────────────────────────────────────────────────
 
 export interface HotelReview {
