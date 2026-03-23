@@ -1,15 +1,20 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { gaps, competitors, venueScores, demandSignals } from "@/lib/data";
 import type { GapOpportunity } from "@/lib/data";
 import type { InstagramProfile } from "@/app/api/instagram-analysis/route";
+import type { Snapshot } from "@/lib/db";
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
+} from "recharts";
 
-type Tab = "gaps" | "radar" | "venues" | "demand";
+type Tab = "gaps" | "radar" | "instagram" | "venues" | "demand";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "gaps", label: "Fırsat Boşlukları" },
   { id: "radar", label: "Rakip Radar" },
+  { id: "instagram", label: "Rakip Instagram" },
   { id: "venues", label: "Mekan Pulse" },
   { id: "demand", label: "İstanbul Sinyalleri" },
 ];
@@ -458,6 +463,274 @@ function DemandTab() {
   );
 }
 
+// ── colour palette per competitor ──────────────────────────────────────────
+const HANDLE_COLOR: Record<string, string> = {
+  fsbosphorus:              "#f59e0b",
+  conradistanbulbosphorus:  "#3b82f6",
+  grandhyattistanbul:       "#22c55e",
+  mo_istanbul:              "#ef4444",
+  rixostersaneistanbul:     "#8b5cf6",
+  hiltonistanbulbosphorus:  "#06b6d4",
+  ritzcarltonistanbul:      "#f97316",
+};
+
+function shortLabel(handle: string) {
+  return competitors.find((c) => c.instagramHandle === handle)?.shortName ?? handle;
+}
+
+function InstagramHistoryTab() {
+  const [days, setDays] = useState(30);
+  const [history, setHistory] = useState<Snapshot[]>([]);
+  const [latest, setLatest] = useState<Snapshot[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Backfill form state
+  const [showBackfill, setShowBackfill] = useState(false);
+  const [bfHandle, setBfHandle] = useState(competitors[0]?.instagramHandle ?? "");
+  const [bfFollowers, setBfFollowers] = useState("");
+  const [bfDate, setBfDate] = useState("");
+  const [bfSaving, setBfSaving] = useState(false);
+  const [bfMsg, setBfMsg] = useState<string | null>(null);
+
+  const load = useCallback(async (d: number) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/instagram-history?days=${d}`);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setHistory(data.history);
+      setLatest(data.latest);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(days); }, [days, load]);
+
+  // Build recharts data: [{date, fsbosphorus: 116000, ...}, ...]
+  const chartData = (() => {
+    const byDate = new Map<string, Record<string, unknown>>();
+    history.forEach((s) => {
+      if (!byDate.has(s.snap_date)) byDate.set(s.snap_date, { date: s.snap_date });
+      byDate.get(s.snap_date)![s.username] = s.followers;
+    });
+    return Array.from(byDate.values()).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  })();
+
+  const handles = [...new Set(history.map((s) => s.username))];
+
+  // Ranked latest
+  const ranked = [...latest].sort((a, b) => b.followers - a.followers);
+
+  const saveBackfill = async () => {
+    if (!bfHandle || !bfFollowers || !bfDate) return;
+    setBfSaving(true);
+    setBfMsg(null);
+    try {
+      const res = await fetch("/api/instagram-history", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: bfHandle,
+          fullName: competitors.find((c) => c.instagramHandle === bfHandle)?.name ?? bfHandle,
+          followers: parseInt(bfFollowers),
+          date: bfDate,
+        }),
+      });
+      const d = await res.json();
+      if (d.error) throw new Error(d.error);
+      setBfMsg("Kaydedildi ✓");
+      load(days);
+    } catch (e) {
+      setBfMsg(`Hata: ${e}`);
+    } finally {
+      setBfSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+
+      {/* Header row */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h3 className="font-semibold text-white/90">Takipçi Geçmişi</h3>
+          <p className="text-xs text-zinc-500">Her gece 00:00&apos;da otomatik çekilir</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {[30, 60, 90].map((d) => (
+            <button
+              key={d}
+              onClick={() => setDays(d)}
+              className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
+                days === d
+                  ? "text-black font-semibold"
+                  : "glass glass-hover text-zinc-400"
+              }`}
+              style={days === d ? { background: "linear-gradient(135deg,#c9a84c,#e8c660)" } : {}}
+            >
+              {d} gün
+            </button>
+          ))}
+          <button
+            onClick={() => setShowBackfill(!showBackfill)}
+            className={`text-xs px-3 py-1.5 rounded-lg transition-all ${showBackfill ? "text-amber-300 bg-amber-500/20 border border-amber-500/40" : "glass glass-hover text-zinc-400"}`}
+          >
+            Geçmiş Ekle
+          </button>
+        </div>
+      </div>
+
+      {/* Backfill form */}
+      {showBackfill && (
+        <div className="glass rounded-2xl p-4 space-y-3" style={{ border: "1px solid rgba(201,168,76,0.25)" }}>
+          <p className="text-xs text-zinc-400 font-medium">Geçmişe dönük veri ekle</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <select
+              value={bfHandle}
+              onChange={(e) => setBfHandle(e.target.value)}
+              className="bg-transparent border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-amber-500/50"
+            >
+              {competitors.map((c) => (
+                <option key={c.instagramHandle} value={c.instagramHandle} className="bg-zinc-900">
+                  {c.shortName} (@{c.instagramHandle})
+                </option>
+              ))}
+            </select>
+            <input
+              type="number"
+              placeholder="Takipçi sayısı"
+              value={bfFollowers}
+              onChange={(e) => setBfFollowers(e.target.value)}
+              className="bg-transparent border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-amber-500/50"
+            />
+            <input
+              type="date"
+              value={bfDate}
+              onChange={(e) => setBfDate(e.target.value)}
+              className="bg-transparent border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-amber-500/50"
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={saveBackfill}
+              disabled={bfSaving}
+              className="text-xs px-4 py-2 rounded-lg font-semibold disabled:opacity-50 text-black"
+              style={{ background: "linear-gradient(135deg,#c9a84c,#e8c660)" }}
+            >
+              {bfSaving ? "Kaydediliyor..." : "Kaydet"}
+            </button>
+            {bfMsg && <span className="text-xs text-zinc-400">{bfMsg}</span>}
+          </div>
+        </div>
+      )}
+
+      {loading && (
+        <div className="flex items-center gap-3 py-10 justify-center">
+          <div className="w-5 h-5 border-2 border-amber-500/30 border-t-amber-400 rounded-full animate-spin" />
+          <p className="text-sm text-zinc-400">Yükleniyor...</p>
+        </div>
+      )}
+
+      {error && <p className="text-xs text-red-400 py-4 text-center">{error}</p>}
+
+      {!loading && !error && history.length === 0 && (
+        <div className="glass rounded-2xl p-8 text-center" style={{ border: "1px solid rgba(255,255,255,0.06)" }}>
+          <p className="text-zinc-400 text-sm mb-1">Henüz veri yok.</p>
+          <p className="text-zinc-600 text-xs">İlk snapshot bu gece 00:00&apos;da otomatik çekilecek. Ya da "Geçmiş Ekle" ile manuel girebilirsin.</p>
+        </div>
+      )}
+
+      {!loading && chartData.length > 0 && (
+        <>
+          {/* Line chart */}
+          <div className="glass rounded-2xl p-5" style={{ border: "1px solid rgba(255,255,255,0.07)" }}>
+            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-4">Takipçi Büyüme Grafiği</p>
+            <ResponsiveContainer width="100%" height={260}>
+              <LineChart data={chartData} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
+                <XAxis
+                  dataKey="date"
+                  tickFormatter={(v: string) => v.slice(5)}
+                  tick={{ fill: "#71717a", fontSize: 10 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}K` : String(v)}
+                  tick={{ fill: "#71717a", fontSize: 10 }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={38}
+                />
+                <Tooltip
+                  contentStyle={{ background: "#0c0c14", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, fontSize: 12 }}
+                  labelStyle={{ color: "#a1a1aa" }}
+                  formatter={(value: unknown, name: unknown) => [Number(value).toLocaleString("tr-TR"), shortLabel(String(name))]}
+                />
+                <Legend
+                  formatter={(value: string) => <span style={{ color: "#a1a1aa", fontSize: 11 }}>{shortLabel(value)}</span>}
+                />
+                {handles.map((h) => (
+                  <Line
+                    key={h}
+                    type="monotone"
+                    dataKey={h}
+                    stroke={HANDLE_COLOR[h] ?? "#6b7280"}
+                    strokeWidth={2}
+                    dot={false}
+                    activeDot={{ r: 4 }}
+                  />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Ranked table */}
+          <div className="glass rounded-2xl overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.07)" }}>
+            <div className="p-4 border-b" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+              <p className="text-xs text-zinc-500 uppercase tracking-wider">Son Snapshot — Takipçi Sıralaması</p>
+            </div>
+            <div className="divide-y" style={{ borderColor: "rgba(255,255,255,0.05)" }}>
+              {ranked.map((s, i) => {
+                const prev = history
+                  .filter((h) => h.username === s.username)
+                  .sort((a, b) => String(a.snap_date).localeCompare(String(b.snap_date)));
+                const prevFollowers = prev.length >= 2 ? prev[prev.length - 2].followers : null;
+                const diff = prevFollowers !== null ? s.followers - prevFollowers : null;
+                const color = HANDLE_COLOR[s.username] ?? "#6b7280";
+                return (
+                  <div key={s.username} className="flex items-center gap-4 px-4 py-3">
+                    <span className="text-xs font-bold w-5 text-zinc-600">#{i + 1}</span>
+                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: color }} />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium text-white/80">{shortLabel(s.username)}</span>
+                      <span className="text-xs text-zinc-600 ml-2">@{s.username}</span>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold tabular-nums" style={{ color }}>
+                        {s.followers.toLocaleString("tr-TR")}
+                      </p>
+                      {diff !== null && (
+                        <p className={`text-xs tabular-nums ${diff >= 0 ? "text-green-400" : "text-red-400"}`}>
+                          {diff >= 0 ? "+" : ""}{diff.toLocaleString("tr-TR")}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function Page() {
   const [tab, setTab] = useState<Tab>("gaps");
 
@@ -548,10 +821,11 @@ export default function Page() {
         </div>
 
         {/* Content */}
-        {tab === "gaps"   && <GapsTab />}
-        {tab === "radar"  && <RadarTab />}
-        {tab === "venues" && <VenuesTab />}
-        {tab === "demand" && <DemandTab />}
+        {tab === "gaps"      && <GapsTab />}
+        {tab === "radar"     && <RadarTab />}
+        {tab === "instagram" && <InstagramHistoryTab />}
+        {tab === "venues"    && <VenuesTab />}
+        {tab === "demand"    && <DemandTab />}
       </div>
 
       {/* Footer */}
