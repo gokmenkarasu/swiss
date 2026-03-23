@@ -140,41 +140,73 @@ export interface PostStats {
 
 export async function getPostStats(days: number): Promise<PostStats[]> {
   const rows = await sql`
+    WITH post_agg AS (
+      SELECT
+        username,
+        COUNT(*)::int                                                      AS total_posts,
+        COUNT(*) FILTER (WHERE post_type = 'Image')::int                  AS photo_count,
+        COUNT(*) FILTER (WHERE post_type = 'Video')::int                  AS video_count,
+        COUNT(*) FILTER (WHERE post_type = 'Sidecar')::int                AS carousel_count,
+        ROUND(AVG(likes_count), 2)                                        AS avg_likes,
+        ROUND(AVG(comments_count), 2)                                     AS avg_comments,
+        ROUND(AVG(CASE WHEN views_count > 0 THEN views_count END), 2)     AS avg_views,
+        MAX(posted_at)::text                                              AS latest_post_at,
+        MIN(posted_at)::text                                              AS oldest_post_at
+      FROM instagram_posts
+      WHERE posted_at >= NOW() - (${days}::int * INTERVAL '1 day')
+      GROUP BY username
+    ),
+    latest_followers AS (
+      SELECT DISTINCT ON (username) username, followers
+      FROM instagram_snapshots
+      ORDER BY username, snap_date DESC
+    )
     SELECT
-      username,
-      COUNT(*)::int                                            AS total_posts,
-      COUNT(*) FILTER (WHERE post_type = 'Image')::int        AS photo_count,
-      COUNT(*) FILTER (WHERE post_type = 'Video')::int        AS video_count,
-      COUNT(*) FILTER (WHERE post_type = 'Sidecar')::int      AS carousel_count,
-      ROUND(AVG(likes_count), 2)                              AS avg_likes,
-      ROUND(AVG(comments_count), 2)                           AS avg_comments,
-      ROUND(AVG(CASE WHEN views_count > 0 THEN views_count END), 2) AS avg_views,
-      MAX(posted_at)::text                                    AS latest_post_at,
-      MIN(posted_at)::text                                    AS oldest_post_at
-    FROM instagram_posts
-    WHERE posted_at >= NOW() - (${days}::int * INTERVAL '1 day')
-    GROUP BY username
+      p.*,
+      CASE
+        WHEN COALESCE(f.followers, 0) > 0
+        THEN ROUND(((p.avg_likes + p.avg_comments) / f.followers::numeric) * 100, 4)
+        ELSE 0
+      END AS engagement_rate
+    FROM post_agg p
+    LEFT JOIN latest_followers f USING (username)
   `;
   return rows as PostStats[];
 }
 
 export async function getPostStatsByRange(from: string, to: string): Promise<PostStats[]> {
   const rows = await sql`
+    WITH post_agg AS (
+      SELECT
+        username,
+        COUNT(*)::int                                                      AS total_posts,
+        COUNT(*) FILTER (WHERE post_type = 'Image')::int                  AS photo_count,
+        COUNT(*) FILTER (WHERE post_type = 'Video')::int                  AS video_count,
+        COUNT(*) FILTER (WHERE post_type = 'Sidecar')::int                AS carousel_count,
+        ROUND(AVG(likes_count), 2)                                        AS avg_likes,
+        ROUND(AVG(comments_count), 2)                                     AS avg_comments,
+        ROUND(AVG(CASE WHEN views_count > 0 THEN views_count END), 2)     AS avg_views,
+        MAX(posted_at)::text                                              AS latest_post_at,
+        MIN(posted_at)::text                                              AS oldest_post_at
+      FROM instagram_posts
+      WHERE posted_at >= ${from}::date
+        AND posted_at <  (${to}::date + INTERVAL '1 day')
+      GROUP BY username
+    ),
+    latest_followers AS (
+      SELECT DISTINCT ON (username) username, followers
+      FROM instagram_snapshots
+      ORDER BY username, snap_date DESC
+    )
     SELECT
-      username,
-      COUNT(*)::int                                            AS total_posts,
-      COUNT(*) FILTER (WHERE post_type = 'Image')::int        AS photo_count,
-      COUNT(*) FILTER (WHERE post_type = 'Video')::int        AS video_count,
-      COUNT(*) FILTER (WHERE post_type = 'Sidecar')::int      AS carousel_count,
-      ROUND(AVG(likes_count), 2)                              AS avg_likes,
-      ROUND(AVG(comments_count), 2)                           AS avg_comments,
-      ROUND(AVG(CASE WHEN views_count > 0 THEN views_count END), 2) AS avg_views,
-      MAX(posted_at)::text                                    AS latest_post_at,
-      MIN(posted_at)::text                                    AS oldest_post_at
-    FROM instagram_posts
-    WHERE posted_at >= ${from}::date
-      AND posted_at <  (${to}::date + INTERVAL '1 day')
-    GROUP BY username
+      p.*,
+      CASE
+        WHEN COALESCE(f.followers, 0) > 0
+        THEN ROUND(((p.avg_likes + p.avg_comments) / f.followers::numeric) * 100, 4)
+        ELSE 0
+      END AS engagement_rate
+    FROM post_agg p
+    LEFT JOIN latest_followers f USING (username)
   `;
   return rows as PostStats[];
 }
