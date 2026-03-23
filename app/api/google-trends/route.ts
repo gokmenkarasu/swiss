@@ -25,7 +25,16 @@ function calcTrend(data: { values: (number | null)[] }[]): { trendPct: number; s
   const mid = Math.floor(vals.length / 2);
   const oldAvg = vals.slice(0, mid).reduce((s, v) => s + v, 0) / mid;
   const newAvg = vals.slice(mid).reduce((s, v) => s + v, 0) / (vals.length - mid);
-  const trendPct = oldAvg > 0 ? Math.round(((newAvg - oldAvg) / oldAvg) * 100) : 0;
+
+  let trendPct: number;
+  if (oldAvg === 0 && newAvg === 0) {
+    trendPct = 0;
+  } else if (oldAvg === 0) {
+    trendPct = Math.min(Math.round(newAvg * 3), 99);
+  } else {
+    trendPct = Math.round(((newAvg - oldAvg) / oldAvg) * 100);
+  }
+
   return { trendPct, sparkline: vals };
 }
 
