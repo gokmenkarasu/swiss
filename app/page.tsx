@@ -942,11 +942,11 @@ function PostingHeatmapSection() {
       ) : (
         <div className="relative overflow-x-auto">
           {/* Grid */}
-          <div className="flex gap-0.5">
+          <div className="flex gap-0.5 items-end">
             {/* Day labels */}
-            <div className="flex flex-col gap-1 mr-2">
+            <div className="flex flex-col gap-1 mr-2 pb-0">
               {/* spacer for month label row */}
-              <div className="h-4" />
+              <div className="h-5" />
               {DAY_LABELS.map((lbl, i) => (
                 <div key={i} className="h-3 w-7 text-[10px] text-zinc-500 flex items-center justify-end pr-1">
                   {lbl}
@@ -956,14 +956,20 @@ function PostingHeatmapSection() {
 
             {/* Week columns */}
             {weeks.map((week, wi) => {
-              const isMonthStart = monthLabels[wi] !== null;
+              const monthLabel = monthLabels[wi];
               return (
-                <div key={wi} className={`flex flex-col gap-1 ${isMonthStart ? "ml-2" : ""}`}>
-                  {/* Month label */}
-                  <div className={`h-4 text-[10px] font-medium text-center whitespace-nowrap ${
-                    isMonthStart ? "text-amber-400" : "text-transparent"
-                  }`}>
-                    {monthLabels[wi] ?? "·"}
+                <div
+                  key={wi}
+                  className="flex flex-col gap-1"
+                  style={monthLabel ? { borderLeft: "1px solid rgba(255,255,255,0.15)", paddingLeft: "4px", marginLeft: "4px" } : {}}
+                >
+                  {/* Month label — only at boundary */}
+                  <div className="h-5 flex items-end pb-0.5">
+                    {monthLabel && (
+                      <span className="text-[11px] font-semibold text-zinc-300 whitespace-nowrap tracking-wide">
+                        {monthLabel}
+                      </span>
+                    )}
                   </div>
                   {/* Cells */}
                   {week.map((date, di) => {
