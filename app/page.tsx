@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { gaps, competitors, venueScores, demandSignals } from "@/lib/data";
 import type { GapOpportunity } from "@/lib/data";
+import type { InstagramProfile } from "@/app/api/instagram-analysis/route";
 
 type Tab = "gaps" | "radar" | "venues" | "demand";
 
@@ -109,68 +110,255 @@ function GapsTab() {
   );
 }
 
+type IgState = "idle" | "loading" | "done" | "error";
+
 function RadarTab() {
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [igState, setIgState] = useState<IgState>("idle");
+  const [igProfiles, setIgProfiles] = useState<Map<string, InstagramProfile>>(new Map());
+  const [igError, setIgError] = useState<string | null>(null);
+
+  // Manual overrides: handle -> followersCount
+  const [manualMode, setManualMode] = useState(false);
+  const [manualInputs, setManualInputs] = useState<Record<string, string>>(
+    Object.fromEntries(competitors.map((c) => [c.instagramHandle, ""]))
+  );
+
+  const fetchIgData = useCallback(async (handles: string[]) => {
+    setIgState("loading");
+    setIgError(null);
+    try {
+      const res = await fetch("/api/instagram-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ usernames: handles }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      const map = new Map<string, InstagramProfile>();
+      (data.profiles as InstagramProfile[]).forEach((p) => map.set(p.username, p));
+      setIgProfiles(map);
+      setIgState("done");
+    } catch (e) {
+      setIgError(String(e));
+      setIgState("error");
+    }
+  }, []);
+
+  const applyManual = () => {
+    const map = new Map<string, InstagramProfile>();
+    competitors.forEach((c) => {
+      const val = parseInt(manualInputs[c.instagramHandle] ?? "");
+      if (!isNaN(val)) {
+        map.set(c.instagramHandle, {
+          username: c.instagramHandle,
+          fullName: c.name,
+          followersCount: val,
+          followsCount: 0,
+          biography: "",
+          profilePicUrl: "",
+          isBusinessAccount: true,
+          highlightReelCount: 0,
+          fetchedAt: new Date().toISOString(),
+        });
+      }
+    });
+    setIgProfiles(map);
+    setIgState("done");
+  };
+
+  const maxFollowers = Math.max(...Array.from(igProfiles.values()).map((p) => p.followersCount), 1);
+
   return (
-    <div className="space-y-3">
-      {competitors.map((c) => (
-        <div key={c.name} className="glass rounded-2xl overflow-hidden">
-          <button
-            className="w-full p-5 flex items-center gap-4 text-left glass-hover transition-all"
-            onClick={() => setExpanded(expanded === c.name ? null : c.name)}
-          >
-            <div className="flex-1">
+    <div className="space-y-6">
+
+      {/* ── Instagram Analizi ── */}
+      <div className="glass rounded-2xl overflow-hidden" style={{ border: "1px solid rgba(168,85,247,0.2)" }}>
+        <div className="p-5 border-b" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
               <div className="flex items-center gap-2 mb-0.5">
-                <span className="font-semibold text-white/90 text-sm">{c.shortName}</span>
-                <span className="text-xs text-zinc-500">{c.name}</span>
+                <span className="w-2 h-2 rounded-full bg-purple-400" />
+                <h3 className="font-semibold text-white/90 text-sm">Instagram Analizi</h3>
               </div>
-              <div className="flex items-center gap-3 text-xs text-zinc-400">
-                <span className="text-blue-400">● {c.activeAds.length} aktif reklam</span>
-                <span>{c.adSpendEstimate}</span>
-                <span className="text-purple-400">IG Eng: %{c.instagramEngagement}</span>
-              </div>
+              <p className="text-xs text-zinc-500">Rakip hesaplarının gerçek zamanlı takipçi verisi</p>
             </div>
-            <svg className={`w-4 h-4 text-zinc-500 flex-shrink-0 transition-transform ${expanded === c.name ? "rotate-180" : ""}`}
-              fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-          {expanded === c.name && (
-            <div className="px-5 pb-5 space-y-4 slide-up">
-              <div>
-                <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Aktif Reklamlar</p>
-                <div className="space-y-2">
-                  {c.activeAds.map((ad, i) => (
-                    <div key={i} className="flex items-start gap-3 rounded-xl p-3" style={{ background: "rgba(255,255,255,0.03)" }}>
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full mt-0.5 flex-shrink-0 ${
-                        ad.platform === "Meta" ? "bg-blue-500/20 text-blue-400" :
-                        ad.platform === "Google" ? "bg-red-500/20 text-red-400" :
-                        "bg-purple-500/20 text-purple-400"
-                      }`}>{ad.platform}</span>
-                      <div>
-                        <p className="text-sm text-white/80">{ad.headline}</p>
-                        <p className="text-xs text-zinc-500">{ad.format} · {ad.since}</p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setManualMode(!manualMode)}
+                className={`text-xs px-3 py-1.5 rounded-lg transition-all ${manualMode ? "text-purple-300 bg-purple-500/20 border border-purple-500/40" : "glass glass-hover text-zinc-400"}`}
+              >
+                Manuel Giriş
+              </button>
+              {!manualMode && (
+                <button
+                  onClick={() => fetchIgData(competitors.map((c) => c.instagramHandle))}
+                  disabled={igState === "loading"}
+                  className="text-xs px-3 py-1.5 rounded-lg font-semibold transition-all disabled:opacity-50"
+                  style={{ background: "rgba(168,85,247,0.2)", color: "#c084fc", border: "1px solid rgba(168,85,247,0.4)" }}
+                >
+                  {igState === "loading" ? "Çekiliyor..." : igState === "done" ? "Yenile" : "Veri Çek"}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="p-5">
+          {/* Manual input form */}
+          {manualMode && (
+            <div className="space-y-3 mb-4">
+              <p className="text-xs text-zinc-500">Takipçi sayısını manuel gir:</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {competitors.map((c) => (
+                  <div key={c.instagramHandle} className="flex items-center gap-2 rounded-xl p-2.5" style={{ background: "rgba(255,255,255,0.03)" }}>
+                    <span className="text-xs text-zinc-400 w-24 truncate flex-shrink-0">@{c.instagramHandle}</span>
+                    <input
+                      type="number"
+                      placeholder="örn. 89400"
+                      value={manualInputs[c.instagramHandle] ?? ""}
+                      onChange={(e) => setManualInputs((prev) => ({ ...prev, [c.instagramHandle]: e.target.value }))}
+                      className="flex-1 bg-transparent border border-white/10 rounded-lg px-2 py-1 text-xs text-white outline-none focus:border-purple-500/50"
+                    />
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={applyManual}
+                className="text-xs px-4 py-2 rounded-lg font-semibold"
+                style={{ background: "rgba(168,85,247,0.25)", color: "#c084fc", border: "1px solid rgba(168,85,247,0.4)" }}
+              >
+                Uygula
+              </button>
+            </div>
+          )}
+
+          {/* Loading */}
+          {igState === "loading" && (
+            <div className="flex items-center gap-3 py-6 justify-center">
+              <div className="w-5 h-5 border-2 border-purple-500/30 border-t-purple-400 rounded-full animate-spin" />
+              <p className="text-sm text-zinc-400">Instagram verileri çekiliyor (~30 sn)...</p>
+            </div>
+          )}
+
+          {/* Error */}
+          {igState === "error" && (
+            <p className="text-xs text-red-400 py-4 text-center">{igError}</p>
+          )}
+
+          {/* Idle prompt */}
+          {igState === "idle" && !manualMode && (
+            <div className="py-8 text-center">
+              <p className="text-zinc-500 text-sm mb-1">Rakip Instagram verileri henüz çekilmedi.</p>
+              <p className="text-zinc-600 text-xs">Yukarıdaki "Veri Çek" butonuna bas.</p>
+            </div>
+          )}
+
+          {/* Results */}
+          {igState === "done" && igProfiles.size > 0 && (
+            <div className="space-y-2.5">
+              {[...competitors]
+                .filter((c) => igProfiles.has(c.instagramHandle))
+                .sort((a, b) => (igProfiles.get(b.instagramHandle)?.followersCount ?? 0) - (igProfiles.get(a.instagramHandle)?.followersCount ?? 0))
+                .map((c, rank) => {
+                  const p = igProfiles.get(c.instagramHandle)!;
+                  const pct = Math.round((p.followersCount / maxFollowers) * 100);
+                  return (
+                    <div key={c.instagramHandle} className="flex items-center gap-3 rounded-xl p-3" style={{ background: "rgba(255,255,255,0.03)" }}>
+                      <span className="text-xs font-bold w-5 text-center text-zinc-600">#{rank + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <div>
+                            <span className="text-xs font-semibold text-white/80">{c.shortName}</span>
+                            <span className="text-xs text-zinc-600 ml-1.5">@{c.instagramHandle}</span>
+                          </div>
+                          <span className="text-xs font-bold text-purple-300 tabular-nums">
+                            {p.followersCount.toLocaleString("tr-TR")}
+                          </span>
+                        </div>
+                        <div className="w-full rounded-full h-1.5" style={{ background: "rgba(255,255,255,0.06)" }}>
+                          <div
+                            className="h-1.5 rounded-full"
+                            style={{ width: `${pct}%`, background: rank === 0 ? "#a855f7" : "rgba(168,85,247,0.4)" }}
+                          />
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <span className="text-xs text-zinc-500">IG Eng</span>
+                        <p className="text-xs font-semibold text-amber-300">%{c.instagramEngagement}</p>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Top Keywords</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {c.topKeywords.map((kw) => (
-                    <span key={kw} className="text-xs px-2 py-1 rounded-lg text-zinc-300" style={{ background: "rgba(255,255,255,0.05)" }}>{kw}</span>
-                  ))}
-                </div>
-              </div>
-              <div className="rounded-xl p-3" style={{ background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.2)" }}>
-                <p className="text-xs text-zinc-400 uppercase tracking-wider mb-1">Swissotel için Fırsat</p>
-                <p className="text-sm text-amber-300">{c.weakness}</p>
-              </div>
+                  );
+                })}
             </div>
           )}
         </div>
-      ))}
+      </div>
+
+      {/* ── Reklam İstihbaratı ── */}
+      <div>
+        <p className="text-xs text-zinc-500 uppercase tracking-wider mb-3 px-1">Reklam İstihbaratı</p>
+        <div className="space-y-3">
+          {competitors.map((c) => (
+            <div key={c.name} className="glass rounded-2xl overflow-hidden">
+              <button
+                className="w-full p-5 flex items-center gap-4 text-left glass-hover transition-all"
+                onClick={() => setExpanded(expanded === c.name ? null : c.name)}
+              >
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="font-semibold text-white/90 text-sm">{c.shortName}</span>
+                    <span className="text-xs text-zinc-500">{c.name}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-zinc-400">
+                    <span className="text-blue-400">● {c.activeAds.length} aktif reklam</span>
+                    <span>{c.adSpendEstimate}</span>
+                    <span className="text-purple-400">IG Eng: %{c.instagramEngagement}</span>
+                  </div>
+                </div>
+                <svg className={`w-4 h-4 text-zinc-500 flex-shrink-0 transition-transform ${expanded === c.name ? "rotate-180" : ""}`}
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {expanded === c.name && (
+                <div className="px-5 pb-5 space-y-4 slide-up">
+                  <div>
+                    <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Aktif Reklamlar</p>
+                    <div className="space-y-2">
+                      {c.activeAds.map((ad, i) => (
+                        <div key={i} className="flex items-start gap-3 rounded-xl p-3" style={{ background: "rgba(255,255,255,0.03)" }}>
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full mt-0.5 flex-shrink-0 ${
+                            ad.platform === "Meta" ? "bg-blue-500/20 text-blue-400" :
+                            ad.platform === "Google" ? "bg-red-500/20 text-red-400" :
+                            "bg-purple-500/20 text-purple-400"
+                          }`}>{ad.platform}</span>
+                          <div>
+                            <p className="text-sm text-white/80">{ad.headline}</p>
+                            <p className="text-xs text-zinc-500">{ad.format} · {ad.since}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Top Keywords</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {c.topKeywords.map((kw) => (
+                        <span key={kw} className="text-xs px-2 py-1 rounded-lg text-zinc-300" style={{ background: "rgba(255,255,255,0.05)" }}>{kw}</span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="rounded-xl p-3" style={{ background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.2)" }}>
+                    <p className="text-xs text-zinc-400 uppercase tracking-wider mb-1">Swissotel için Fırsat</p>
+                    <p className="text-sm text-amber-300">{c.weakness}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

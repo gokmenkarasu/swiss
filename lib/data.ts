@@ -16,6 +16,7 @@ export type GapOpportunity = {
 export type Competitor = {
   name: string;
   shortName: string;
+  instagramHandle: string;
   activeAds: CompetitorAd[];
   topKeywords: string[];
   instagramEngagement: number;
@@ -153,6 +154,7 @@ export const competitors: Competitor[] = [
   {
     name: "Conrad İstanbul Bosphorus",
     shortName: "Conrad",
+    instagramHandle: "conradistanbulbosphorus",
     activeAds: [
       { platform: "Google", headline: "Conrad Istanbul — Official Site | Book Direct & Save", format: "Search", since: "3 gün önce" },
       { platform: "Meta", headline: "Executive Floor Spring Package — 15% off", format: "Single Image", since: "5 gün önce" },
@@ -165,6 +167,7 @@ export const competitors: Competitor[] = [
   {
     name: "Grand Hyatt İstanbul",
     shortName: "Grand Hyatt",
+    instagramHandle: "grandhyattistanbul",
     activeAds: [
       { platform: "Google", headline: "Grand Hyatt Istanbul | Luxury in the City Center", format: "Search", since: "1 gün önce" },
       { platform: "Instagram", headline: "Summer Preview — Rooftop Terrace Opening Soon", format: "Reel", since: "2 gün önce" },
@@ -177,6 +180,7 @@ export const competitors: Competitor[] = [
   {
     name: "Mandarin Oriental",
     shortName: "Mandarin",
+    instagramHandle: "mo_istanbul",
     activeAds: [
       { platform: "Google", headline: "Mandarin Oriental Istanbul | Bosphorus Luxury", format: "Search", since: "6 gün önce" },
       { platform: "Meta", headline: "The Mandarin Spa — Urban Retreat in Istanbul", format: "Carousel", since: "4 gün önce" },
@@ -189,6 +193,7 @@ export const competitors: Competitor[] = [
   {
     name: "Four Seasons Bosphorus",
     shortName: "Four Seasons",
+    instagramHandle: "fsbosphorus",
     activeAds: [
       { platform: "Google", headline: "Four Seasons Istanbul | Historic Palace Hotel", format: "Search", since: "2 gün önce" },
       { platform: "Instagram", headline: "Spring Awakening — Garden Dining Returns", format: "Single Image", since: "7 gün önce" },
@@ -201,6 +206,7 @@ export const competitors: Competitor[] = [
   {
     name: "Rixos Tersane İstanbul",
     shortName: "Rixos",
+    instagramHandle: "rixostersaneistanbul",
     activeAds: [
       { platform: "Instagram", headline: "Tersane İstanbul — Where History Meets Luxury", format: "Reel", since: "1 gün önce" },
       { platform: "Meta", headline: "Rixos Tersane — All-Inclusive Luxury Experience", format: "Single Image", since: "3 gün önce" },
@@ -213,6 +219,7 @@ export const competitors: Competitor[] = [
   {
     name: "Ritz-Carlton İstanbul",
     shortName: "Ritz-Carlton",
+    instagramHandle: "ritzcarltonistanbul",
     activeAds: [
       { platform: "Google", headline: "The Ritz-Carlton İstanbul | Luxury on the Bosphorus", format: "Search", since: "4 gün önce" },
       { platform: "Meta", headline: "Harbor Views — Spring Dining Experience", format: "Carousel", since: "8 gün önce" },
@@ -221,6 +228,19 @@ export const competitors: Competitor[] = [
     instagramEngagement: 3.7,
     adSpendEstimate: "₺250K–320K/ay",
     weakness: "Sisli lokasyonu Boğaz'dan uzak — bu zayıflık Swissotel'in açık havuz, bahçe, doğrudan Boğaz görüşüyle exploit edilebilir.",
+  },
+  {
+    name: "Hilton İstanbul Bosphorus",
+    shortName: "Hilton",
+    instagramHandle: "hiltonistanbulbosphorus",
+    activeAds: [
+      { platform: "Google", headline: "Hilton Istanbul Bosphorus | Official Site", format: "Search", since: "2 gün önce" },
+      { platform: "Meta", headline: "Spring Staycation — Bosphorus Views & More", format: "Single Image", since: "5 gün önce" },
+    ],
+    topKeywords: ["hilton istanbul bosphorus", "bosphorus view hotel", "istanbul luxury hotel"],
+    instagramEngagement: 2.8,
+    adSpendEstimate: "₺160K–220K/ay",
+    weakness: "Genel Hilton brand mesajı ağırlıklı — lokal İstanbul deneyimi ve gastronomi aktivasyonu zayıf.",
   },
 ];
 
