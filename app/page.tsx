@@ -156,20 +156,20 @@ const GEO_META: Record<string, { flag: string; name: string }> = {
 function MiniSparkline({ values }: { values: number[] }) {
   if (!values || values.length < 2) return null;
   const max = Math.max(...values, 1);
-  const w = 80;
-  const h = 28;
+  const W = 300;
+  const H = 56;
   const pts = values.map((v, i) => {
-    const x = (i / (values.length - 1)) * w;
-    const y = h - (v / max) * h;
+    const x = (i / (values.length - 1)) * W;
+    const y = H - (v / max) * H;
     return `${x},${y}`;
   });
   return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
+    <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} className="overflow-visible" preserveAspectRatio="none">
       <polyline
         points={pts.join(" ")}
         fill="none"
         stroke="currentColor"
-        strokeWidth="1.5"
+        strokeWidth="3"
         strokeLinejoin="round"
         strokeLinecap="round"
       />
@@ -296,7 +296,7 @@ function TrendRadarTab() {
 
                 {/* Sparkline */}
                 {t.sparkline && t.sparkline.length > 1 && (
-                  <div className="mt-2" style={{ color: sparkColor }}>
+                  <div className="mt-3 w-full" style={{ color: sparkColor }}>
                     <MiniSparkline values={t.sparkline} />
                   </div>
                 )}
