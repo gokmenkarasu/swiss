@@ -532,6 +532,26 @@ function InstagramHistoryTab() {
     return Array.from(byDate.values()).sort((a, b) => String(a.date).localeCompare(String(b.date)));
   })();
 
+  // Normalized chart data: first appearance of each handle = 100 (base)
+  const baseValues: Record<string, number> = {};
+  chartData.forEach((row) => {
+    allHandles.forEach((h) => {
+      if (!(h in baseValues) && row[h] !== undefined) {
+        baseValues[h] = row[h] as number;
+      }
+    });
+  });
+  const normalizedChartData = chartData.map((row) => {
+    const out: Record<string, unknown> = { date: row.date };
+    allHandles.forEach((h) => {
+      if (row[h] !== undefined && baseValues[h]) {
+        out[h] = parseFloat(((row[h] as number / baseValues[h]) * 100).toFixed(4));
+        out[`${h}_abs`] = row[h];
+      }
+    });
+    return out;
+  });
+
   const allHandles = [...new Set(history.map((s) => s.username))];
   const handles = allHandles.filter((h) => activeHandles.has(h));
 
@@ -687,9 +707,14 @@ function InstagramHistoryTab() {
         <>
           {/* Line chart */}
           <div className="glass rounded-2xl p-5" style={{ border: "1px solid rgba(255,255,255,0.07)" }}>
-            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-4">Takipçi Büyüme Grafiği</p>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-xs text-zinc-500 uppercase tracking-wider">Büyüme Performansı</p>
+                <p className="text-[10px] text-zinc-600 mt-0.5">İlk gün = 100 baz · değer arttıkça büyüme hızlanıyor</p>
+              </div>
+            </div>
             <ResponsiveContainer width="100%" height={260}>
-              <LineChart data={chartData} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
+              <LineChart data={normalizedChartData} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
                 <XAxis
                   dataKey="date"
                   tickFormatter={(v: string) => v.slice(5)}
@@ -698,19 +723,34 @@ function InstagramHistoryTab() {
                   tickLine={false}
                 />
                 <YAxis
-                  tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}K` : String(v)}
+                  domain={["auto", "auto"]}
+                  tickFormatter={(v: number) => `${(v - 100) >= 0 ? "+" : ""}${(v - 100).toFixed(2)}%`}
                   tick={{ fill: "#71717a", fontSize: 10 }}
                   axisLine={false}
                   tickLine={false}
-                  width={38}
+                  width={52}
                 />
                 <Tooltip
                   contentStyle={{ background: "#0c0c14", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, fontSize: 12 }}
-                  labelStyle={{ color: "#a1a1aa" }}
-                  formatter={(value: unknown, name: unknown) => [Number(value).toLocaleString("tr-TR"), shortLabel(String(name))]}
+                  labelStyle={{ color: "#a1a1aa", marginBottom: 4 }}
+                  formatter={(value: unknown, name: unknown) => {
+                    const h = String(name);
+                    if (h.endsWith("_abs")) return [null, null];
+                    const idx = Number(value);
+                    const base = baseValues[h];
+                    if (!base) return [idx.toFixed(2), shortLabel(h)];
+                    const abs = Math.round(base * idx / 100);
+                    const diff = abs - base;
+                    const pctStr = `${(idx - 100) >= 0 ? "+" : ""}${(idx - 100).toFixed(2)}%`;
+                    const diffStr = `${diff >= 0 ? "+" : ""}${diff.toLocaleString("tr-TR")} takipçi`;
+                    return [`${abs.toLocaleString("tr-TR")} · ${pctStr} · ${diffStr}`, shortLabel(h)];
+                  }}
                 />
                 <Legend
-                  formatter={(value: string) => <span style={{ color: "#a1a1aa", fontSize: 11 }}>{shortLabel(value)}</span>}
+                  formatter={(value: string) => {
+                    if (value.endsWith("_abs")) return null;
+                    return <span style={{ color: "#a1a1aa", fontSize: 11 }}>{shortLabel(value)}</span>;
+                  }}
                 />
                 {handles.map((h) => (
                   <Line
@@ -721,6 +761,7 @@ function InstagramHistoryTab() {
                     strokeWidth={2}
                     dot={false}
                     activeDot={{ r: 4 }}
+                    connectNulls
                   />
                 ))}
               </LineChart>
