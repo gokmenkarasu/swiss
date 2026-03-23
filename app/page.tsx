@@ -45,7 +45,7 @@ function ScoreArc({ score, color }: { score: number; color: string }) {
   );
 }
 
-function GapCard({ gap, onBrief }: { gap: GapOpportunity; onBrief: (g: GapOpportunity) => void }) {
+function GapCard({ gap }: { gap: GapOpportunity }) {
   const urg = urgencyConfig[gap.urgency];
   return (
     <div className={`glass glass-hover rounded-2xl p-5 border ${urg.border} transition-all duration-200`}>
@@ -82,13 +82,6 @@ function GapCard({ gap, onBrief }: { gap: GapOpportunity; onBrief: (g: GapOpport
               </svg>
               {gap.channel}
             </div>
-            <button
-              onClick={() => onBrief(gap)}
-              className="ml-auto text-xs font-semibold px-3 py-1.5 rounded-lg transition-all duration-150 hover:scale-105 active:scale-95"
-              style={{ background: gap.venueColor + "22", color: gap.venueColor, border: `1px solid ${gap.venueColor}55` }}
-            >
-              Brief Oluştur →
-            </button>
           </div>
         </div>
       </div>
@@ -96,124 +89,8 @@ function GapCard({ gap, onBrief }: { gap: GapOpportunity; onBrief: (g: GapOpport
   );
 }
 
-function BriefModal({ gap, onClose }: { gap: GapOpportunity; onClose: () => void }) {
-  const [brief, setBrief] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
 
-  const generate = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/brief", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          keyword: gap.keyword,
-          venue: gap.venue,
-          targetAge: gap.targetAge,
-          channel: gap.channel,
-          insight: gap.insight,
-        }),
-      });
-      const data = await res.json();
-      setBrief(data.brief);
-    } catch {
-      setBrief("Brief oluşturulamadı. Lütfen tekrar deneyin.");
-    }
-    setLoading(false);
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-      <div
-        className="relative glass-strong rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto slide-up"
-        style={{ background: "rgba(12,12,20,0.96)", border: "1px solid rgba(255,255,255,0.1)" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="p-6 border-b border-white/08">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-xs px-2 py-0.5 rounded-full font-medium"
-                  style={{ background: gap.venueColor + "22", color: gap.venueColor }}>
-                  {gap.venue}
-                </span>
-                <span className="text-xs text-zinc-500">AI Kampanya Brief Üreteci</span>
-              </div>
-              <h3 className="font-semibold text-white/90">"{gap.keyword}"</h3>
-            </div>
-            <button onClick={onClose} className="text-zinc-500 hover:text-white transition-colors p-1">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        </div>
-        <div className="p-6">
-          {!brief && !loading && (
-            <div className="text-center py-8">
-              <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center"
-                style={{ background: gap.venueColor + "22" }}>
-                <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke={gap.venueColor}>
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-              </div>
-              <p className="text-zinc-200 mb-1 font-medium">Hazır mısın?</p>
-              <p className="text-zinc-500 text-sm mb-6">Bu fırsat için AI destekli kampanya brief'i oluşturuluyor.</p>
-              <button
-                onClick={generate}
-                className="px-6 py-2.5 rounded-xl font-semibold text-sm transition-all duration-150 hover:scale-105 active:scale-95 text-black"
-                style={{ background: `linear-gradient(135deg, ${gap.venueColor}, ${gap.venueColor}cc)` }}
-              >
-                Brief Oluştur
-              </button>
-            </div>
-          )}
-          {loading && (
-            <div className="text-center py-12">
-              <div className="w-10 h-10 border-2 rounded-full animate-spin mx-auto mb-4"
-                style={{ borderColor: gap.venueColor + "40", borderTopColor: gap.venueColor }} />
-              <p className="text-zinc-400 text-sm">AI brief hazırlıyor...</p>
-            </div>
-          )}
-          {brief && (
-            <div className="fade-in">
-              <div className="space-y-1">
-                {brief.split("\n").map((line, i) => {
-                  if (line.startsWith("**") && line.endsWith("**")) {
-                    return (
-                      <h4 key={i} className="font-semibold mt-5 mb-1 first:mt-0 text-sm" style={{ color: gap.venueColor }}>
-                        {line.replace(/\*\*/g, "")}
-                      </h4>
-                    );
-                  }
-                  if (line.startsWith("•")) {
-                    return <p key={i} className="text-zinc-300 text-sm pl-3">{line}</p>;
-                  }
-                  if (line.trim() === "") return <div key={i} className="h-1" />;
-                  return <p key={i} className="text-zinc-300 text-sm">{line}</p>;
-                })}
-              </div>
-              <div className="mt-6 pt-4 border-t border-white/08 flex gap-2">
-                <button onClick={generate} className="text-xs px-3 py-1.5 rounded-lg glass glass-hover text-zinc-400 transition-all">
-                  Yeniden Oluştur
-                </button>
-                <button
-                  onClick={() => navigator.clipboard.writeText(brief)}
-                  className="text-xs px-3 py-1.5 rounded-lg glass glass-hover text-zinc-400 transition-all"
-                >
-                  Kopyala
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function GapsTab({ onBrief }: { onBrief: (g: GapOpportunity) => void }) {
+function GapsTab() {
   const criticalCount = gaps.filter((g) => g.urgency === "critical").length;
   const avgCoverage = Math.round(gaps.filter((g) => g.urgency === "critical").reduce((a, g) => a + g.competitorCoverage, 0) / criticalCount);
   return (
@@ -226,7 +103,7 @@ function GapsTab({ onBrief }: { onBrief: (g: GapOpportunity) => void }) {
         </p>
       </div>
       <div className="grid gap-4">
-        {gaps.map((g) => <GapCard key={g.id} gap={g} onBrief={onBrief} />)}
+        {gaps.map((g) => <GapCard key={g.id} gap={g} />)}
       </div>
     </div>
   );
@@ -395,7 +272,6 @@ function DemandTab() {
 
 export default function Page() {
   const [tab, setTab] = useState<Tab>("gaps");
-  const [briefGap, setBriefGap] = useState<GapOpportunity | null>(null);
 
   const now = new Date();
   const dateStr = now.toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric" });
@@ -484,7 +360,7 @@ export default function Page() {
         </div>
 
         {/* Content */}
-        {tab === "gaps"   && <GapsTab onBrief={setBriefGap} />}
+        {tab === "gaps"   && <GapsTab />}
         {tab === "radar"  && <RadarTab />}
         {tab === "venues" && <VenuesTab />}
         {tab === "demand" && <DemandTab />}
@@ -496,7 +372,6 @@ export default function Page() {
         Gap Finder · Swissotel The Bosphorus İstanbul · Powered by AI Intelligence
       </div>
 
-      {briefGap && <BriefModal gap={briefGap} onClose={() => setBriefGap(null)} />}
     </div>
   );
 }
