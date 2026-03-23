@@ -60,6 +60,7 @@ export async function POST(req: Request) {
   await initTrendTrackerTable();
 
   const results: TrackedTrend[] = [];
+  const errors: string[] = [];
 
   for (const item of TRACKED) {
     try {
@@ -82,7 +83,9 @@ export async function POST(req: Request) {
       const d = await res.json();
       const task = d.tasks?.[0];
       if (task?.status_code !== 20000) {
-        console.error("[trend-radar] bad status", item.geo, task?.status_code, task?.status_message);
+        const msg = `${item.geo}: [${task?.status_code}] ${task?.status_message}`;
+        console.error("[trend-radar]", msg);
+        errors.push(msg);
         continue;
       }
 
@@ -92,12 +95,14 @@ export async function POST(req: Request) {
       await upsertTrackedTrend(item.keyword, item.geo, item.label, trendPct, sparkline);
       results.push({ keyword: item.keyword, geo: item.geo, label: item.label, trend_pct: trendPct, sparkline, fetched_at: new Date().toISOString() });
     } catch (e) {
-      console.error("[trend-radar]", item.keyword, item.geo, e);
+      const msg = `${item.geo}: exception ${String(e)}`;
+      console.error("[trend-radar]", msg);
+      errors.push(msg);
     }
   }
 
   const all = await getTrackedTrends();
   const alerts = all.filter((r) => r.trend_pct >= ALERT_THRESHOLD);
 
-  return NextResponse.json({ trends: all, alerts, refreshed: results.length });
+  return NextResponse.json({ trends: all, alerts, refreshed: results.length, errors });
 }

@@ -201,6 +201,9 @@ function TrendRadarTab() {
       const r = await fetch("/api/trend-radar?action=refresh", { method: "POST" });
       const d = await r.json();
       setTrends(d.trends ?? []);
+      if (d.errors?.length) {
+        setLastError(`${d.refreshed ?? 0}/4 güncellendi · Hata: ${d.errors.join(" | ")}`);
+      }
     } catch {
       setLastError("Yenileme başarısız");
     } finally {
