@@ -611,14 +611,14 @@ function ContentIntelligenceTab() {
   const statMap = new Map(stats.map((s) => [s.username, s]));
   const snapMap = new Map(latestSnaps.map((s) => [s.username, s]));
 
-  // Sort competitors by engagement_rate desc
+  // Sort competitors by engagement_rate desc (DB returns NUMERIC as string → Number())
   const sorted = [...competitors].sort((a, b) => {
-    const ra = statMap.get(a.instagramHandle)?.engagement_rate ?? 0;
-    const rb = statMap.get(b.instagramHandle)?.engagement_rate ?? 0;
+    const ra = Number(statMap.get(a.instagramHandle)?.engagement_rate ?? 0);
+    const rb = Number(statMap.get(b.instagramHandle)?.engagement_rate ?? 0);
     return rb - ra;
   });
 
-  const maxEng = Math.max(...sorted.map((c) => statMap.get(c.instagramHandle)?.engagement_rate ?? 0), 0.01);
+  const maxEng = Math.max(...sorted.map((c) => Number(statMap.get(c.instagramHandle)?.engagement_rate ?? 0)), 0.01);
 
   const medalColor = (i: number) =>
     i === 0 ? "#FFD700" : i === 1 ? "#C0C0C0" : i === 2 ? "#CD7F32" : "#3f3f46";
@@ -703,9 +703,9 @@ function ContentIntelligenceTab() {
             const stat = statMap.get(c.instagramHandle);
             const snap = snapMap.get(c.instagramHandle);
             const color = HANDLE_COLOR[c.instagramHandle] ?? "#6b7280";
-            const engRate = stat?.engagement_rate ?? 0;
+            const engRate = Number(stat?.engagement_rate ?? 0);
             const engPct  = maxEng > 0 ? (engRate / maxEng) * 100 : 0;
-            const total   = stat ? stat.photo_count + stat.video_count + stat.carousel_count : 0;
+            const total   = stat ? Number(stat.photo_count) + Number(stat.video_count) + Number(stat.carousel_count) : 0;
             const isSelf  = c.isSelf;
 
             return (
@@ -759,22 +759,22 @@ function ContentIntelligenceTab() {
                         <div className="flex items-center gap-4 mb-3 flex-wrap">
                           <div className="text-center">
                             <p className="text-sm font-bold tabular-nums text-rose-400">
-                              {Math.round(stat.avg_likes).toLocaleString("tr-TR")}
+                              {Math.round(Number(stat.avg_likes)).toLocaleString("tr-TR")}
                             </p>
                             <p className="text-[10px] text-zinc-600">ort. like</p>
                           </div>
                           <div className="text-center">
                             <p className="text-sm font-bold tabular-nums text-sky-400">
-                              {Math.round(stat.avg_comments).toLocaleString("tr-TR")}
+                              {Math.round(Number(stat.avg_comments)).toLocaleString("tr-TR")}
                             </p>
                             <p className="text-[10px] text-zinc-600">ort. yorum</p>
                           </div>
-                          {stat.avg_views > 0 && (
+                          {Number(stat.avg_views) > 0 && (
                             <div className="text-center">
                               <p className="text-sm font-bold tabular-nums text-violet-400">
-                                {stat.avg_views >= 1000
-                                  ? `${(stat.avg_views / 1000).toFixed(1)}K`
-                                  : Math.round(stat.avg_views).toLocaleString("tr-TR")}
+                                {Number(stat.avg_views) >= 1000
+                                  ? `${(Number(stat.avg_views) / 1000).toFixed(1)}K`
+                                  : Math.round(Number(stat.avg_views)).toLocaleString("tr-TR")}
                               </p>
                               <p className="text-[10px] text-zinc-600">ort. görüntülenme</p>
                             </div>
@@ -783,9 +783,9 @@ function ContentIntelligenceTab() {
                           {total > 0 && (
                             <div className="flex-1 min-w-[80px]">
                               <div className="flex rounded-full overflow-hidden h-1.5">
-                                <div style={{ width: `${(stat.photo_count / total) * 100}%`, background: "#f59e0b" }} />
-                                <div style={{ width: `${(stat.video_count / total) * 100}%`, background: "#8b5cf6" }} />
-                                <div style={{ width: `${(stat.carousel_count / total) * 100}%`, background: "#06b6d4" }} />
+                                <div style={{ width: `${(Number(stat.photo_count) / total) * 100}%`, background: "#f59e0b" }} />
+                                <div style={{ width: `${(Number(stat.video_count) / total) * 100}%`, background: "#8b5cf6" }} />
+                                <div style={{ width: `${(Number(stat.carousel_count) / total) * 100}%`, background: "#06b6d4" }} />
                               </div>
                               <p className="text-[9px] text-zinc-700 mt-0.5">
                                 <span style={{ color: "#f59e0b" }}>■</span> foto
