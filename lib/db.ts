@@ -324,6 +324,33 @@ export async function getPostingSchedule(): Promise<{ username: string; date: st
   return rows as { username: string; date: string; count: number }[];
 }
 
+// ─── TRENDS CACHE ────────────────────────────────────────────────────────────
+
+export async function initTrendsTable() {
+  await sql`
+    CREATE TABLE IF NOT EXISTS trends_cache (
+      keyword     TEXT PRIMARY KEY,
+      trend_pct   INTEGER NOT NULL,
+      sparkline   JSONB,
+      fetched_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+}
+
+export async function upsertTrend(keyword: string, trendPct: number, sparkline: number[]) {
+  await sql`
+    INSERT INTO trends_cache (keyword, trend_pct, sparkline)
+    VALUES (${keyword}, ${trendPct}, ${JSON.stringify(sparkline)})
+    ON CONFLICT (keyword)
+    DO UPDATE SET trend_pct = EXCLUDED.trend_pct, sparkline = EXCLUDED.sparkline, fetched_at = NOW()
+  `;
+}
+
+export async function getTrends(): Promise<{ keyword: string; trend_pct: number; sparkline: number[]; fetched_at: string }[]> {
+  const rows = await sql`SELECT keyword, trend_pct, sparkline, fetched_at::text FROM trends_cache`;
+  return rows as { keyword: string; trend_pct: number; sparkline: number[]; fetched_at: string }[];
+}
+
 // ─── COMPETITOR REVIEWS ─────────────────────────────────────────────────────
 
 export interface HotelReview {

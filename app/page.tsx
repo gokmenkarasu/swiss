@@ -150,11 +150,10 @@ function GapsTab() {
   const [trendsLoading, setTrendsLoading] = useState(true);
 
   useEffect(() => {
-    const keywords = gaps.map((g) => g.keyword).join(",");
-    fetch(`/api/google-trends?keywords=${encodeURIComponent(keywords)}`)
+    fetch(`/api/google-trends`)
       .then((r) => r.ok ? r.json() : Promise.reject())
-      .then((data: TrendMap) => setTrends(data))
-      .catch(() => {/* silent fallback — cards still show */})
+      .then((data: { trends: TrendMap }) => setTrends(data.trends ?? {}))
+      .catch(() => {/* silent fallback */})
       .finally(() => setTrendsLoading(false));
   }, []);
 
