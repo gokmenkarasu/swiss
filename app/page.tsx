@@ -894,7 +894,7 @@ function PostingHeatmapSection() {
     return "bg-green-500";
   };
 
-  const DAY_LABELS = ["Pzt", "", "Çar", "", "Cum", "", ""];
+  const DAY_LABELS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
 
   const totalPosts = Object.values(countMap).reduce((a, b) => a + b, 0);
 
@@ -941,48 +941,51 @@ function PostingHeatmapSection() {
         <div className="text-xs text-zinc-600 py-4 text-center">Henüz post verisi yok</div>
       ) : (
         <div className="relative overflow-x-auto">
-          {/* Month labels row */}
-          <div className="flex gap-1 mb-1 ml-8">
-            {weeks.map((_, wi) => (
-              <div key={wi} className="w-3 text-[9px] text-zinc-600 text-center">
-                {monthLabels[wi] ?? ""}
-              </div>
-            ))}
-          </div>
-
           {/* Grid */}
           <div className="flex gap-0.5">
             {/* Day labels */}
-            <div className="flex flex-col gap-1 mr-1.5">
+            <div className="flex flex-col gap-1 mr-2">
+              {/* spacer for month label row */}
+              <div className="h-4" />
               {DAY_LABELS.map((lbl, i) => (
-                <div key={i} className="h-3 w-5 text-[9px] text-zinc-600 flex items-center justify-end pr-0.5">
+                <div key={i} className="h-3 w-7 text-[10px] text-zinc-500 flex items-center justify-end pr-1">
                   {lbl}
                 </div>
               ))}
             </div>
 
             {/* Week columns */}
-            {weeks.map((week, wi) => (
-              <div key={wi} className="flex flex-col gap-1">
-                {week.map((date, di) => {
-                  if (!date) {
-                    return <div key={di} className="w-3 h-3" />;
-                  }
-                  const count = countMap[date] ?? 0;
-                  return (
-                    <div
-                      key={di}
-                      className={`w-3 h-3 rounded-sm cursor-default transition-opacity hover:opacity-80 ${cellColor(count)}`}
-                      onMouseEnter={(e) => {
-                        const rect = (e.target as HTMLElement).getBoundingClientRect();
-                        setHovered({ date, count, x: rect.left + window.scrollX, y: rect.top + window.scrollY });
-                      }}
-                      onMouseLeave={() => setHovered(null)}
-                    />
-                  );
-                })}
-              </div>
-            ))}
+            {weeks.map((week, wi) => {
+              const isMonthStart = monthLabels[wi] !== null;
+              return (
+                <div key={wi} className={`flex flex-col gap-1 ${isMonthStart ? "ml-2" : ""}`}>
+                  {/* Month label */}
+                  <div className={`h-4 text-[10px] font-medium text-center whitespace-nowrap ${
+                    isMonthStart ? "text-amber-400" : "text-transparent"
+                  }`}>
+                    {monthLabels[wi] ?? "·"}
+                  </div>
+                  {/* Cells */}
+                  {week.map((date, di) => {
+                    if (!date) {
+                      return <div key={di} className="w-3 h-3" />;
+                    }
+                    const count = countMap[date] ?? 0;
+                    return (
+                      <div
+                        key={di}
+                        className={`w-3 h-3 rounded-sm cursor-default transition-opacity hover:opacity-80 ${cellColor(count)}`}
+                        onMouseEnter={(e) => {
+                          const rect = (e.target as HTMLElement).getBoundingClientRect();
+                          setHovered({ date, count, x: rect.left + window.scrollX, y: rect.top + window.scrollY });
+                        }}
+                        onMouseLeave={() => setHovered(null)}
+                      />
+                    );
+                  })}
+                </div>
+              );
+            })}
           </div>
 
           {/* Legend */}
