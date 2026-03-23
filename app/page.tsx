@@ -36,7 +36,7 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 
-type Tab = "gaps" | "radar" | "instagram" | "content" | "venues" | "demand" | "reviews";
+type Tab = "gaps" | "radar" | "instagram" | "content" | "venues" | "demand" | "reviews" | "tripadvisor";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "gaps", label: "Fırsat Boşlukları" },
@@ -45,7 +45,8 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "content", label: "Engagement" },
   { id: "venues", label: "Mekan Pulse" },
   { id: "demand", label: "İstanbul Sinyalleri" },
-  { id: "reviews", label: "⭐ İtibar Skoru" },
+  { id: "reviews", label: "⭐ Google İtibar" },
+  { id: "tripadvisor", label: "🦉 TripAdvisor" },
 ];
 
 const urgencyConfig = {
@@ -287,6 +288,164 @@ function VenuesTab() {
   );
 }
 
+// ─── TRIPADVISOR TAB ─────────────────────────────────────────────────────────
+
+function TripAdvisorTab() {
+  const [data, setData] = React.useState<HotelReviewRow[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [refreshing, setRefreshing] = React.useState(false);
+  const [selected, setSelected] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    fetch("/api/tripadvisor-reviews")
+      .then((r) => r.json())
+      .then((d) => { setData(d.reviews ?? []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  async function refresh() {
+    setRefreshing(true);
+    try {
+      const r = await fetch("/api/tripadvisor-reviews?action=refresh", { method: "POST" });
+      const d = await r.json();
+      setData(d.reviews ?? []);
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  const maxReviews = Math.max(...data.map((d) => d.reviews_count ?? 0), 1);
+  const fetchedAt = data[0]?.fetched_at
+    ? new Date(data[0].fetched_at).toLocaleDateString("tr-TR", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })
+    : null;
+
+  if (loading) return <div className="flex items-center justify-center h-48 text-zinc-500 text-sm">Veriler yükleniyor…</div>;
+
+  if (data.length === 0) return (
+    <div className="flex flex-col items-center justify-center h-48 gap-3">
+      <p className="text-zinc-400 text-sm">Henüz TripAdvisor verisi çekilmedi.</p>
+      <button onClick={refresh} disabled={refreshing}
+        className="px-4 py-2 rounded-lg text-sm font-medium text-black"
+        style={{ background: "linear-gradient(135deg,#34e0a1,#00af87)" }}>
+        {refreshing ? "Çekiliyor… (~30sn)" : "TripAdvisor'dan Çek"}
+      </button>
+    </div>
+  );
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-white">TripAdvisor Puan Karşılaştırması</h2>
+          {fetchedAt && <p className="text-xs text-zinc-500 mt-0.5">Son güncelleme: {fetchedAt}</p>}
+        </div>
+        <button onClick={refresh} disabled={refreshing}
+          className="px-3 py-1.5 rounded-lg text-xs font-medium text-black transition-opacity"
+          style={{ background: "linear-gradient(135deg,#34e0a1,#00af87)", opacity: refreshing ? 0.6 : 1 }}>
+          {refreshing ? "Güncelleniyor…" : "↻ Güncelle"}
+        </button>
+      </div>
+
+      {/* Leaderboard */}
+      <div className="glass rounded-2xl overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.07)" }}>
+        <div className="px-5 py-3 border-b" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+          <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">TripAdvisor Sıralaması</p>
+        </div>
+        <div className="p-3 space-y-2">
+          {data.map((row, i) => {
+            const meta = HOTEL_META[row.hotel_key];
+            if (!meta) return null;
+            const medalColor = i === 0 ? "#FFD700" : i === 1 ? "#C0C0C0" : i === 2 ? "#CD7F32" : "#3f3f46";
+            const barW = Math.round(((row.rating - 3.5) / 1.5) * 100);
+            const reviewsPct = Math.round((row.reviews_count / maxReviews) * 100);
+            const isActive = selected === row.hotel_key;
+            const taColor = "#34e0a1";
+            return (
+              <div key={row.hotel_key}
+                onClick={() => setSelected(isActive ? null : row.hotel_key)}
+                className="rounded-xl px-4 py-3 cursor-pointer transition-all duration-150"
+                style={{
+                  background: meta.isSelf ? "rgba(52,224,161,0.06)" : isActive ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.025)",
+                  border: `1px solid ${meta.isSelf ? "rgba(52,224,161,0.25)" : isActive ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.05)"}`,
+                }}>
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-sm font-bold"
+                    style={{ background: `${medalColor}20`, color: medalColor }}>{i + 1}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-sm font-medium text-white truncate">{meta.label}</span>
+                      {meta.isSelf && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold"
+                          style={{ background: "rgba(52,224,161,0.2)", color: taColor }}>SİZ</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.06)" }}>
+                        <div className="h-full rounded-full transition-all duration-500"
+                          style={{ width: `${Math.max(barW, 0)}%`, background: taColor }} />
+                      </div>
+                      <span className="text-sm font-bold" style={{ color: taColor }}>🦉 {row.rating?.toFixed(1)}</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <div className="flex-1 h-1 rounded-full" style={{ background: "rgba(255,255,255,0.04)" }}>
+                        <div className="h-full rounded-full" style={{ width: `${reviewsPct}%`, background: `${taColor}50` }} />
+                      </div>
+                      <span className="text-[11px] text-zinc-500">{row.reviews_count?.toLocaleString("tr-TR")} yorum</span>
+                    </div>
+                  </div>
+                </div>
+
+                {isActive && row.items?.length > 0 && (
+                  <div className="mt-3 pt-3 border-t space-y-2" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+                    <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-semibold">Son Yorumlar</p>
+                    {row.items.slice(0, 3).map((item, ri) => (
+                      <div key={ri} className="rounded-lg p-3" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs font-medium text-white">{item.profile_name}</span>
+                          <span className="text-[10px]" style={{ color: taColor }}>{"★".repeat(item.rating)}{"☆".repeat(5 - item.rating)}</span>
+                          <span className="text-[10px] text-zinc-600 ml-auto">{item.time_ago}</span>
+                        </div>
+                        {item.title && <p className="text-[11px] font-medium text-zinc-300 mb-0.5">"{item.title}"</p>}
+                        <p className="text-[11px] text-zinc-400 leading-relaxed line-clamp-3">{item.review_text}</p>
+                        {item.owner_answer && (
+                          <div className="mt-2 pl-2 border-l" style={{ borderColor: `${taColor}40` }}>
+                            <p className="text-[10px] text-zinc-600 font-medium mb-0.5">Yönetim Yanıtı</p>
+                            <p className="text-[10px] text-zinc-500 leading-relaxed line-clamp-2">{item.owner_answer}</p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Insight */}
+      {data.length > 0 && (() => {
+        const swiss = data.find((d) => d.hotel_key === "swissotel");
+        const rank = data.findIndex((d) => d.hotel_key === "swissotel") + 1;
+        const others = data.filter((d) => d.hotel_key !== "swissotel");
+        const avgOthers = others.reduce((s, d) => s + d.rating, 0) / (others.length || 1);
+        return (
+          <div className="glass rounded-xl p-4" style={{ border: "1px solid rgba(52,224,161,0.2)" }}>
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              <span className="font-semibold" style={{ color: "#34e0a1" }}>
+                TripAdvisor'da {rank}. sıradasınız.
+              </span>{" "}
+              {swiss?.rating.toFixed(1)} puan · {swiss?.reviews_count?.toLocaleString("tr-TR")} yorum.
+              Rakip ortalaması {avgOthers.toFixed(1)} — fark {swiss ? (swiss.rating - avgOthers > 0 ? "+" : "") + (swiss.rating - avgOthers).toFixed(2) : "—"} puan.
+            </p>
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
 // ─── REVIEWS TAB ─────────────────────────────────────────────────────────────
 
 const HOTEL_META: Record<string, { label: string; color: string; isSelf?: boolean }> = {
@@ -305,7 +464,7 @@ interface HotelReviewRow {
   platform: string;
   rating: number;
   reviews_count: number;
-  items: { review_text: string; time_ago: string; rating: number; profile_name: string; owner_answer?: string }[];
+  items: { review_text: string; time_ago: string; rating: number; profile_name: string; owner_answer?: string; title?: string }[];
   fetched_at: string;
 }
 
@@ -1738,7 +1897,8 @@ export default function Page() {
         )}
         {tab === "venues"    && <VenuesTab />}
         {tab === "demand"    && <DemandTab />}
-        {tab === "reviews"   && <ReviewsTab />}
+        {tab === "reviews"      && <ReviewsTab />}
+        {tab === "tripadvisor"  && <TripAdvisorTab />}
       </div>
 
       {/* Footer */}
