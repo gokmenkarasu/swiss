@@ -948,34 +948,38 @@ function ContentIntelligenceTab() {
                         </div>
                       </>
                     ) : (
-                      <p className="text-xs text-zinc-600 mb-3">
-                        Henüz veri yok — Apify ile çek veya manuel gir
-                      </p>
+                      /* No data — show fetch button centered */
+                      <div className="flex flex-col items-center gap-2 py-3">
+                        <p className="text-xs text-zinc-600">Henüz veri yok</p>
+                        <button
+                          onClick={() => fetchOne(c.instagramHandle)}
+                          disabled={fetchingHandle !== null}
+                          className="text-xs px-4 py-2 rounded-lg font-medium transition-all disabled:opacity-40"
+                          style={{ background: "rgba(201,168,76,0.15)", color: "#c9a84c", border: "1px solid rgba(201,168,76,0.3)" }}
+                        >
+                          {fetchingHandle === c.instagramHandle ? "⏳ Çekiliyor..." : "Apify ile çek"}
+                        </button>
+                      </div>
                     )}
                   </div>
 
-                  {/* Engagement rate + fetch button */}
-                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                    <div className="text-right">
-                      <p className="text-xl font-bold tabular-nums leading-none" style={{ color }}>
-                        %{engRate.toFixed(2)}
-                      </p>
-                      <p className="text-[10px] text-zinc-600 mt-0.5">eng. rate</p>
+                  {/* Engagement rate (only when data exists) */}
+                  {stat && (
+                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                      <div className="text-right">
+                        <p className="text-xl font-bold tabular-nums leading-none" style={{ color }}>
+                          %{engRate.toFixed(2)}
+                        </p>
+                        <p className="text-[10px] text-zinc-600 mt-0.5">eng. rate</p>
+                      </div>
+                      <div className="w-16 rounded-full h-1" style={{ background: "rgba(255,255,255,0.07)" }}>
+                        <div
+                          className="h-1 rounded-full transition-all duration-700"
+                          style={{ width: `${engPct}%`, background: color }}
+                        />
+                      </div>
                     </div>
-                    <div className="w-16 rounded-full h-1" style={{ background: "rgba(255,255,255,0.07)" }}>
-                      <div
-                        className="h-1 rounded-full transition-all duration-700"
-                        style={{ width: `${engPct}%`, background: color }}
-                      />
-                    </div>
-                    <button
-                      onClick={() => fetchOne(c.instagramHandle)}
-                      disabled={fetchingHandle !== null}
-                      className="text-[10px] px-2.5 py-1 rounded-lg transition-all disabled:opacity-40 glass glass-hover text-zinc-400"
-                    >
-                      {fetchingHandle === c.instagramHandle ? "Çekiliyor..." : "Apify ile çek"}
-                    </button>
-                  </div>
+                  )}
                 </div>
               </div>
             );
