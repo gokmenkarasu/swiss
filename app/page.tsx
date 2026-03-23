@@ -777,14 +777,14 @@ function ContentIntelligenceTab() {
                           )}
                         </div>
                       </>
-                    ) : scrapedSet.has(c.instagramHandle) ? (
-                      /* Scraped but no posts in selected date range */
-                      <p className="text-xs text-zinc-600 py-3">Bu dönemde post yok</p>
                     ) : failedSet.has(c.instagramHandle) ? (
                       /* Fetch attempted but Apify returned 0 real posts */
                       <p className="text-xs text-zinc-600 py-3">
                         Veri çekilemedi — hesap Apify tarafından okunamıyor
                       </p>
+                    ) : scrapedSet.has(c.instagramHandle) ? (
+                      /* Scraped but no posts in selected date range */
+                      <p className="text-xs text-zinc-600 py-3">Bu dönemde post yok</p>
                     ) : (
                       /* Never scraped — show fetch button */
                       <div className="flex flex-col items-center gap-2 py-3">
