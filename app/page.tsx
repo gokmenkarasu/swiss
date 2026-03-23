@@ -218,7 +218,7 @@ function TrendRadarTab() {
       {/* Header row */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <p className="text-xs text-zinc-500 uppercase tracking-wider mb-0.5">Google Trends · 90 günlük pencere</p>
+          <p className="text-xs text-zinc-500 uppercase tracking-wider mb-0.5">Google Trends · Son 7 günlük pencere</p>
           <p className="text-sm text-zinc-300 font-medium">Hedef pazar arama trendi takibi</p>
         </div>
         <button
