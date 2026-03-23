@@ -1,6 +1,34 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, Component, ReactNode } from "react";
+
+// ─── ERROR BOUNDARY ───────────────────────────────────────────────────────────
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { error: error.message };
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="glass rounded-2xl p-8 text-center" style={{ border: "1px solid rgba(239,68,68,0.2)" }}>
+          <p className="text-red-400 text-sm mb-1">Bir hata oluştu</p>
+          <p className="text-zinc-600 text-xs">{this.state.error}</p>
+          <button
+            onClick={() => this.setState({ error: null })}
+            className="mt-4 text-xs px-4 py-2 rounded-lg glass glass-hover text-zinc-400"
+          >
+            Tekrar dene
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 import { gaps, competitors, venueScores, demandSignals } from "@/lib/data";
 import type { GapOpportunity } from "@/lib/data";
 import type { InstagramProfile } from "@/app/api/instagram-analysis/route";
@@ -1260,7 +1288,11 @@ export default function Page() {
         {tab === "gaps"      && <GapsTab />}
         {tab === "radar"     && <RadarTab />}
         {tab === "instagram" && <InstagramHistoryTab />}
-        {tab === "content"   && <ContentIntelligenceTab />}
+        {tab === "content"   && (
+          <ErrorBoundary>
+            <ContentIntelligenceTab />
+          </ErrorBoundary>
+        )}
         {tab === "venues"    && <VenuesTab />}
         {tab === "demand"    && <DemandTab />}
       </div>

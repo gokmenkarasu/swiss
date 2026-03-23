@@ -4,16 +4,5 @@
       "path": "/api/cron",
       "schedule": "0 21 * * *"
     }
-  ],
-  "functions": {
-    "app/api/instagram-content/route.ts": {
-      "maxDuration": 300
-    },
-    "app/api/instagram-analysis/route.ts": {
-      "maxDuration": 120
-    },
-    "app/api/cron/route.ts": {
-      "maxDuration": 300
-    }
-  }
+  ]
 }
