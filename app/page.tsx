@@ -888,10 +888,10 @@ function PostingHeatmapSection() {
 
   const cellColor = (count: number) => {
     if (count === 0) return "bg-zinc-800";
-    if (count === 1) return "bg-green-900";
-    if (count === 2) return "bg-green-700";
-    if (count <= 4)  return "bg-green-600";
-    return "bg-green-500";
+    if (count === 1) return "bg-green-300";
+    if (count === 2) return "bg-green-500";
+    if (count <= 4)  return "bg-green-700";
+    return "bg-green-900";
   };
 
   const DAY_LABELS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
@@ -997,7 +997,7 @@ function PostingHeatmapSection() {
           {/* Legend */}
           <div className="flex items-center gap-1.5 mt-3 justify-end">
             <span className="text-[9px] text-zinc-600">Az</span>
-            {["bg-zinc-800", "bg-green-900", "bg-green-700", "bg-green-600", "bg-green-500"].map((cls) => (
+            {["bg-zinc-800", "bg-green-300", "bg-green-500", "bg-green-700", "bg-green-900"].map((cls) => (
               <div key={cls} className={`w-3 h-3 rounded-sm ${cls}`} />
             ))}
             <span className="text-[9px] text-zinc-600">Çok</span>
