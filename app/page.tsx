@@ -499,17 +499,22 @@ function ContentIntelligenceTab() {
   const [mComments, setMComments] = useState("");
   const [mViews, setMViews]     = useState("");
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [contentRes, snapRes] = await Promise.all([
         fetch("/api/instagram-content"),
         fetch("/api/instagram-history?days=1"),
       ]);
-      const contentData = await contentRes.json();
-      const snapData    = await snapRes.json();
+      const contentData = await contentRes.json().catch(() => ({}));
+      const snapData    = await snapRes.json().catch(() => ({}));
       setStats(contentData.stats ?? []);
       setLatestSnaps(snapData.latest ?? []);
+    } catch (e) {
+      setLoadError(String(e));
     } finally {
       setLoading(false);
     }
@@ -520,19 +525,27 @@ function ContentIntelligenceTab() {
   const fetchOne = async (username: string) => {
     const snap = latestSnaps.find((s) => s.username === username);
     setFetchingHandle(username);
-    setMsg(null);
+    setMsg(`⏳ ${username} için Apify çalışıyor, 2-3 dakika sürebilir...`);
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 min
       const res = await fetch("/api/instagram-content", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode: "apify", username, followers: snap?.followers ?? 0 }),
+        signal: controller.signal,
       });
-      const d = await res.json();
+      clearTimeout(timeoutId);
+      const d = await res.json().catch(() => ({ error: "Geçersiz yanıt" }));
       if (d.error) throw new Error(d.error);
       setMsg(`✓ ${username} — ${d.posts_scraped} post çekildi`);
       load();
     } catch (e) {
-      setMsg(`Hata: ${e}`);
+      if (String(e).includes("aborted") || String(e).includes("abort")) {
+        setMsg("⏱ Zaman aşımı — Apify çok uzun sürdü. Manuel giriş kullanın.");
+      } else {
+        setMsg(`⚠️ ${String(e)} — Manuel giriş ile devam edin.`);
+      }
     } finally {
       setFetchingHandle(null);
     }
@@ -642,6 +655,16 @@ function ContentIntelligenceTab() {
         <div className="flex items-center gap-3 py-10 justify-center">
           <div className="w-5 h-5 border-2 border-amber-500/30 border-t-amber-400 rounded-full animate-spin" />
           <p className="text-sm text-zinc-400">Yükleniyor...</p>
+        </div>
+      )}
+
+      {loadError && (
+        <p className="text-xs text-red-400 text-center py-4">{loadError}</p>
+      )}
+
+      {msg && (
+        <div className="glass rounded-xl px-4 py-3 text-xs text-zinc-300" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
+          {msg}
         </div>
       )}
 
