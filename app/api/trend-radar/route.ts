@@ -44,22 +44,7 @@ function calcTrend(data: { values: (number | null)[] }[]): { trendPct: number; s
   return { trendPct, sparkline: vals };
 }
 
-export async function GET() {
-  await initTrendTrackerTable();
-  const rows = await getTrackedTrends();
-
-  const alerts = rows.filter((r) => r.trend_pct >= ALERT_THRESHOLD);
-  const source = rows.length > 0 ? "cache" : "empty";
-
-  return NextResponse.json({ trends: rows, alerts, source });
-}
-
-export async function POST(req: Request) {
-  const { searchParams } = new URL(req.url);
-  if (searchParams.get("action") !== "refresh") {
-    return NextResponse.json({ error: "unknown_action" }, { status: 400 });
-  }
-
+export async function runTrendRadarRefresh(): Promise<{ refreshed: number; errors: string[] }> {
   await initTrendTrackerTable();
 
   const results: TrackedTrend[] = [];
@@ -104,8 +89,28 @@ export async function POST(req: Request) {
     }
   }
 
+  return { refreshed: results.length, errors };
+}
+
+export async function GET() {
+  await initTrendTrackerTable();
+  const rows = await getTrackedTrends();
+
+  const alerts = rows.filter((r) => r.trend_pct >= ALERT_THRESHOLD);
+  const source = rows.length > 0 ? "cache" : "empty";
+
+  return NextResponse.json({ trends: rows, alerts, source });
+}
+
+export async function POST(req: Request) {
+  const { searchParams } = new URL(req.url);
+  if (searchParams.get("action") !== "refresh") {
+    return NextResponse.json({ error: "unknown_action" }, { status: 400 });
+  }
+
+  const { refreshed, errors } = await runTrendRadarRefresh();
   const all = await getTrackedTrends();
   const alerts = all.filter((r) => r.trend_pct >= ALERT_THRESHOLD);
 
-  return NextResponse.json({ trends: all, alerts, refreshed: results.length, errors });
+  return NextResponse.json({ trends: all, alerts, refreshed, errors });
 }

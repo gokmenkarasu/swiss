@@ -72,19 +72,7 @@ async function dfsGet(path: string) {
   return res.json();
 }
 
-export async function GET() {
-  await initReviewsTable();
-  const all = await getHotelReviews();
-  const reviews = all.filter((r) => r.platform === "tripadvisor");
-  return NextResponse.json({ reviews });
-}
-
-export async function POST(req: Request) {
-  const { searchParams } = new URL(req.url);
-  if (searchParams.get("action") !== "refresh") {
-    return NextResponse.json({ error: "unknown_action" }, { status: 400 });
-  }
-
+export async function runTripAdvisorRefresh(): Promise<{ refreshed: number }> {
   await initReviewsTable();
 
   // Post tasks for all hotels
@@ -151,7 +139,23 @@ export async function POST(req: Request) {
     await upsertHotelReview(hkey, "tripadvisor", data.rating, data.reviews_count, data.items as never);
   }
 
+  return { refreshed: saved.size };
+}
+
+export async function GET() {
+  await initReviewsTable();
   const all = await getHotelReviews();
   const reviews = all.filter((r) => r.platform === "tripadvisor");
-  return NextResponse.json({ reviews, refreshed: saved.size });
+  return NextResponse.json({ reviews });
+}
+
+export async function POST(req: Request) {
+  const { searchParams } = new URL(req.url);
+  if (searchParams.get("action") !== "refresh") {
+    return NextResponse.json({ error: "unknown_action" }, { status: 400 });
+  }
+  const { refreshed } = await runTripAdvisorRefresh();
+  const all = await getHotelReviews();
+  const reviews = all.filter((r) => r.platform === "tripadvisor");
+  return NextResponse.json({ reviews, refreshed });
 }

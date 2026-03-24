@@ -31,19 +31,7 @@ async function dfsGet(path: string) {
   return res.json();
 }
 
-export async function GET() {
-  await initReviewsTable();
-  const all = await getHotelReviews();
-  const reviews = all.filter((r) => r.platform === "google");
-  return NextResponse.json({ reviews });
-}
-
-export async function POST(req: Request) {
-  const { searchParams } = new URL(req.url);
-  if (searchParams.get("action") !== "refresh") {
-    return NextResponse.json({ error: "unknown_action" }, { status: 400 });
-  }
-
+export async function runGoogleReviewsRefresh(): Promise<{ refreshed: number }> {
   await initReviewsTable();
 
   // 1 — Post tasks for all hotels
@@ -107,6 +95,22 @@ export async function POST(req: Request) {
     await upsertHotelReview(hkey, "google", data.rating, data.reviews_count, data.items as never);
   }
 
+  return { refreshed: saved.size };
+}
+
+export async function GET() {
+  await initReviewsTable();
+  const all = await getHotelReviews();
+  const reviews = all.filter((r) => r.platform === "google");
+  return NextResponse.json({ reviews });
+}
+
+export async function POST(req: Request) {
+  const { searchParams } = new URL(req.url);
+  if (searchParams.get("action") !== "refresh") {
+    return NextResponse.json({ error: "unknown_action" }, { status: 400 });
+  }
+  const { refreshed } = await runGoogleReviewsRefresh();
   const reviews = await getHotelReviews();
-  return NextResponse.json({ reviews, refreshed: saved.size });
+  return NextResponse.json({ reviews, refreshed });
 }

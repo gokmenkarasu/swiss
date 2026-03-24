@@ -1,12 +1,8 @@
 {
   "crons": [
-    {
-      "path": "/api/cron",
-      "schedule": "0 21 * * *"
-    },
-    {
-      "path": "/api/cron-engagement",
-      "schedule": "0 22 * * *"
-    }
+    { "path": "/api/cron",            "schedule": "0 21 * * *" },
+    { "path": "/api/cron-engagement", "schedule": "0 22 * * *" },
+    { "path": "/api/cron-reviews",    "schedule": "0 23 * * *" },
+    { "path": "/api/cron-trends",     "schedule": "0 0 * * *"  }
   ]
 }
