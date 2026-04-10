@@ -1270,6 +1270,16 @@ function ContentIntelligenceTab() {
                           son güncelleme: {formatDate(lastFetch)}
                         </span>
                       )}
+                      {c.instagramHandle === "cpkempinski" && (
+                        <button
+                          onClick={() => fetchOne(c.instagramHandle)}
+                          disabled={fetchingHandle !== null}
+                          className="text-[10px] px-2 py-0.5 rounded ml-1 transition-all disabled:opacity-40"
+                          style={{ background: "rgba(201,168,76,0.12)", color: "#c9a84c", border: "1px solid rgba(201,168,76,0.25)" }}
+                        >
+                          {fetchingHandle === c.instagramHandle ? "⏳" : "↺ Yenile"}
+                        </button>
+                      )}
                     </div>
 
                     {stat ? (
