@@ -254,6 +254,26 @@ export const competitors: Competitor[] = [
     adSpendEstimate: "₺160K–220K/ay",
     weakness: "Genel Hilton brand mesajı ağırlıklı — lokal İstanbul deneyimi ve gastronomi aktivasyonu zayıf.",
   },
+  {
+    name: "The Peninsula Istanbul",
+    shortName: "Peninsula",
+    instagramHandle: "thepeninsulaistanbulhotel",
+    activeAds: [],
+    topKeywords: ["peninsula istanbul", "luxury hotel istanbul bosphorus", "peninsula hotel istanbul"],
+    instagramEngagement: 0,
+    adSpendEstimate: "Bilinmiyor",
+    weakness: "Yeni açılış — brand awareness fazında, deneyim ve gastronomi aktivasyonu henüz zayıf.",
+  },
+  {
+    name: "Çırağan Palace Kempinski",
+    shortName: "Kempinski",
+    instagramHandle: "cpkempinski",
+    activeAds: [],
+    topKeywords: ["ciragan palace kempinski", "kempinski istanbul", "palace hotel istanbul bosphorus"],
+    instagramEngagement: 0,
+    adSpendEstimate: "Bilinmiyor",
+    weakness: "Tarihi saray konsepti ağırlıklı — modern gastronomi ve genç kitle aktivasyonunda boşluk var.",
+  },
 ];
 
 // ─── VENUE SCORES ────────────────────────────────────────────────────────────
