@@ -2133,7 +2133,7 @@ export default function Page() {
       {/* Footer */}
       <div className="fixed bottom-0 left-0 right-0 py-3 text-center text-xs text-zinc-600"
         style={{ background: "rgba(8,8,15,0.9)", backdropFilter: "blur(10px)", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
-        Gap Finder · Swissotel The Bosphorus İstanbul · Powered by AI Intelligence
+        Pulse · Swissotel The Bosphorus İstanbul · Powered by AI Intelligence
       </div>
 
     </div>
