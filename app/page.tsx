@@ -2002,19 +2002,19 @@ export default function Page() {
     <div className="min-h-screen" style={{ background: "radial-gradient(ellipse at top, #0f0f1a 0%, #08080f 60%)" }}>
       {/* Header */}
       <header className="border-b sticky top-0 z-40"
-        style={{ background: "rgba(8,8,15,0.85)", backdropFilter: "blur(20px)", borderColor: "rgba(255,255,255,0.06)" }}>
-        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+        style={{ background: "rgba(8,8,15,0.88)", backdropFilter: "blur(24px)", borderColor: "rgba(201,168,76,0.12)" }}>
+        <div className="max-w-4xl mx-auto px-4 py-3.5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center text-black font-black text-xs"
-              style={{ background: "linear-gradient(135deg, #c9a84c, #f0d080)" }}>
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center text-black font-black text-[11px] tracking-wider"
+              style={{ background: "linear-gradient(135deg, #c9a84c, #f0d080)", boxShadow: "0 0 16px rgba(201,168,76,0.35)" }}>
               GF
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="font-bold text-white text-sm tracking-wide">GAP FINDER</h1>
-                <span className="text-xs px-1.5 py-0.5 rounded text-zinc-400" style={{ background: "rgba(255,255,255,0.08)" }}>by Swissotel</span>
+                <h1 className="font-semibold text-white text-[11px] tracking-widest uppercase">GAP FINDER</h1>
+                <span className="text-[10px] text-zinc-500 tracking-wide">by Swissotel</span>
               </div>
-              <p className="text-xs text-zinc-500">Marketing Intelligence Platform</p>
+              <p className="text-[10px] text-zinc-600 tracking-wide">Marketing Intelligence Platform</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -2036,14 +2036,12 @@ export default function Page() {
       {/* Main */}
       <div className="max-w-4xl mx-auto px-4 pt-8 pb-16">
         {/* Hero */}
-        <div className="mb-6">
-          <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">
+        <div className="mb-7">
+          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white mb-2.5">
             Bu haftanın{" "}
-            <span style={{ background: "linear-gradient(135deg, #c9a84c, #f0d080)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-              açık pencereleri
-            </span>
+            <span className="shimmer-text">açık pencereleri</span>
           </h2>
-          <p className="text-zinc-400 text-sm">
+          <p className="text-[13px] text-zinc-500 tracking-wide">
             {gaps.length} fırsat tespit edildi · {competitors.length} rakip monitörleniyor · Gerçek zamanlı veri
           </p>
         </div>
@@ -2055,28 +2053,29 @@ export default function Page() {
             { label: "Ort. Fırsat Skoru", value: Math.round(gaps.reduce((a, g) => a + g.opportunityScore, 0) / gaps.length), color: "#c9a84c", sub: "/ 100" },
             { label: "Rakip Kapsam", value: `%${Math.round(gaps.reduce((a, g) => a + g.competitorCoverage, 0) / gaps.length)}`, color: "#22c55e", sub: "ortalama" },
           ].map((c) => (
-            <div key={c.label} className="glass rounded-xl p-4 text-center">
-              <p className="text-2xl font-bold" style={{ color: c.color }}>{c.value}</p>
-              <p className="text-xs text-zinc-400 mt-0.5">{c.label}</p>
-              <p className="text-xs text-zinc-600">{c.sub}</p>
+            <div key={c.label} className="glass rounded-xl p-5 text-center overflow-hidden relative">
+              <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: `linear-gradient(90deg, transparent, ${c.color}60, transparent)` }} />
+              <p className="text-3xl font-bold tabular-nums" style={{ color: c.color }}>{c.value}</p>
+              <p className="text-[11px] text-zinc-400 mt-1 tracking-wide uppercase">{c.label}</p>
+              <p className="text-[10px] text-zinc-600 mt-0.5">{c.sub}</p>
             </div>
           ))}
         </div>
 
         {/* Trend Alert Banner */}
         {!alertsDismissed && trendAlerts.length > 0 && (
-          <div className="glass rounded-xl p-4 mb-5 flex items-start gap-3 border border-orange-500/30"
-            style={{ background: "rgba(120,53,15,0.3)" }}>
-            <span className="text-orange-400 text-lg flex-shrink-0">⚡</span>
+          <div className="rounded-xl p-4 mb-5 flex items-start gap-3 fade-in"
+            style={{ background: "rgba(180,83,9,0.12)", border: "1px solid rgba(251,146,60,0.2)" }}>
+            <span className="text-orange-400 text-base flex-shrink-0 mt-0.5">⚡</span>
             <div className="flex-1 min-w-0">
-              <p className="text-orange-300 font-semibold text-sm">Trend Alarmı — {trendAlerts.length} keyword yükselişte</p>
-              <p className="text-orange-200/60 text-xs mt-0.5 truncate">
+              <p className="text-orange-300 font-semibold text-[13px] tracking-wide">Trend Alarmı — {trendAlerts.length} keyword yükselişte</p>
+              <p className="text-orange-200/50 text-xs mt-0.5 truncate tracking-wide">
                 {trendAlerts.map((a) => `${a.label} (${a.geo}): +${a.trend_pct}%`).join(" · ")}
               </p>
             </div>
             <button
               onClick={() => setAlertsDismissed(true)}
-              className="flex-shrink-0 text-orange-400/50 hover:text-orange-300 transition-colors text-lg leading-none"
+              className="flex-shrink-0 text-orange-400/40 hover:text-orange-300 transition-colors leading-none text-sm"
               aria-label="Kapat"
             >
               ✕
@@ -2085,16 +2084,16 @@ export default function Page() {
         )}
 
         {/* Tabs */}
-        <div className="flex gap-1 p-1 rounded-xl mb-6"
-          style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
+        <div className="flex gap-0 mb-6 overflow-x-auto"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
           {TABS.map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`flex-1 text-xs font-medium py-2 px-2 rounded-lg transition-all duration-150 ${
-                tab === t.id ? "text-black font-semibold" : "text-zinc-400 hover:text-zinc-200"
+              className={`flex-shrink-0 text-[11px] font-medium py-2.5 px-3.5 transition-all duration-150 tracking-wide whitespace-nowrap ${
+                tab === t.id ? "text-amber-400" : "text-zinc-500 hover:text-zinc-300"
               }`}
-              style={tab === t.id ? { background: "linear-gradient(135deg, #c9a84c, #e8c660)" } : {}}
+              style={tab === t.id ? { borderBottom: "2px solid #c9a84c", marginBottom: "-1px" } : { borderBottom: "2px solid transparent", marginBottom: "-1px" }}
             >
               {t.label}
             </button>
