@@ -1472,7 +1472,10 @@ function PostingHeatmapSection() {
   // Months present in data
   const monthSet = new Set(Object.keys(dateMap).map((d) => d.slice(0, 7)));
   const months   = Array.from(monthSet).sort();
-  const weeks    = Object.keys(weekMap).sort();
+  const currentWeekKey = isoWeekKey(new Date().toISOString().slice(0, 10));
+  const weeksSet = new Set(Object.keys(weekMap));
+  weeksSet.add(currentWeekKey);
+  const weeks = Array.from(weeksSet).sort();
 
   const totalPosts = Object.values(dateMap).reduce((a, b) => a + b, 0);
 
