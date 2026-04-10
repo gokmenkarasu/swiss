@@ -2020,11 +2020,11 @@ export default function Page() {
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg flex items-center justify-center text-black font-black text-xs"
               style={{ background: "linear-gradient(135deg, #c9a84c, #f0d080)" }}>
-              GF
+              P
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="font-bold text-white text-sm tracking-wide">GAP FINDER</h1>
+                <h1 className="font-bold text-white text-sm tracking-wide">PULSE</h1>
                 <span className="text-xs px-1.5 py-0.5 rounded text-zinc-400" style={{ background: "rgba(255,255,255,0.08)" }}>by Swissotel</span>
               </div>
               <p className="text-xs text-zinc-500">Marketing Intelligence Platform</p>
@@ -2053,11 +2053,11 @@ export default function Page() {
           <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">
             Bu haftanın{" "}
             <span style={{ background: "linear-gradient(135deg, #c9a84c, #f0d080)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-              açık pencereleri
+              fırsatları
             </span>
           </h2>
           <p className="text-zinc-400 text-sm">
-            {gaps.length} fırsat tespit edildi · {competitors.length} rakip monitörleniyor · Gerçek zamanlı veri
+            {gaps.length} fırsat tespit edildi · {competitors.length} rakip takip ediliyor · Gerçek zamanlı veri
           </p>
         </div>
 

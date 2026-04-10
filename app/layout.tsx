@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Gap Finder — Swissotel Intelligence",
+  title: "Pulse — Swissotel Intelligence",
   description: "Real-time marketing opportunity detection for Swissotel The Bosphorus",
 };
 
