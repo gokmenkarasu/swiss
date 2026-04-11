@@ -4,5 +4,11 @@
     { "path": "/api/cron-engagement", "schedule": "0 22 * * *" },
     { "path": "/api/cron-reviews",    "schedule": "0 23 * * *" },
     { "path": "/api/cron-trends",     "schedule": "0 0 * * *"  }
-  ]
+  ],
+  "functions": {
+    "app/api/cron/route.ts":            { "maxDuration": 300 },
+    "app/api/cron-engagement/route.ts": { "maxDuration": 300 },
+    "app/api/cron-reviews/route.ts":    { "maxDuration": 300 },
+    "app/api/cron-trends/route.ts":     { "maxDuration": 300 }
+  }
 }

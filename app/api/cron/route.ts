@@ -19,8 +19,8 @@ async function fetchProfiles(usernames: string[]) {
   const datasetId: string = runData.data?.defaultDatasetId;
   if (!runId) throw new Error("Apify run failed to start");
 
-  // Poll up to 90s
-  for (let i = 0; i < 30; i++) {
+  // Poll up to 180s
+  for (let i = 0; i < 60; i++) {
     await new Promise((r) => setTimeout(r, 3000));
     const statusRes = await fetch(
       `https://api.apify.com/v2/actor-runs/${runId}?token=${APIFY_TOKEN}`
